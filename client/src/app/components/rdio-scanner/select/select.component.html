@@ -1,6 +1,6 @@
 <fieldset class="fieldset">
     <div>
-        <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status"
+        <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status" title="{{ group.label }}"
             (click)="toggleGroup(group.label)">
             {{ group.label }}
         </button>
@@ -17,7 +17,7 @@
         {{ system.label }}
     </legend>
     <div>
-        <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
+        <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button" title="{{ talkgroup.label }}"
             [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]), on: map[system.id] && map[system.id][talkgroup.id] }"
             (click)="avoid({ system: system, talkgroup: talkgroup })">
             {{ talkgroup.label }}
