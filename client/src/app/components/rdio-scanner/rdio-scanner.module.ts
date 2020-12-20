@@ -19,6 +19,7 @@
 
 import { FullscreenOverlayContainer, OverlayContainer } from '@angular/cdk/overlay';
 import { NgModule } from '@angular/core';
+import { KeyboardShortcutsModule } from 'ng-keyboard-shortcuts';
 import { AppSharedModule } from '../../shared/shared.module';
 import { AppRdioScannerComponent } from './rdio-scanner.component';
 import { AppRdioScannerService } from './rdio-scanner.service';
@@ -34,7 +35,10 @@ import { AppRdioScannerSelectComponent } from './select/select.component';
         AppRdioScannerSelectComponent,
     ],
     exports: [AppRdioScannerComponent],
-    imports: [AppSharedModule],
+    imports: [
+        KeyboardShortcutsModule.forRoot(),
+        AppSharedModule,
+    ],
     providers: [
         AppRdioScannerService,
         { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
