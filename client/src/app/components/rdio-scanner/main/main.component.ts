@@ -45,6 +45,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
     callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
     callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
+    callDuration = 0;
     callQueue = 0;
     callSpike = '0';
     callSystem = 'System';
@@ -371,6 +372,14 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             .concat(' Hz') : '';
     }
 
+    getCallDuration(call?: RdioScannerCall): number | undefined {
+        const durationRaw = call?.frequencies?.reduce((sum, {len}) => sum + (len || 0), 0);
+        if (durationRaw != null) {
+            return durationRaw / 10_000;
+        }
+        return;
+    }
+
     private syncClock(): void {
         this.clockTimer?.unsubscribe();
 
@@ -418,6 +427,8 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
                 this.callFrequency = this.formatFrequency(typeof frequency.freq === 'number' ? frequency.freq : this.call.frequency);
 
                 this.callSpike = typeof frequency.spikeCount === 'number' ? `${frequency.spikeCount}` : '';
+
+                this.callDuration = this.getCallDuration(this.call) || 0;
 
             } else {
                 this.callError = '';
