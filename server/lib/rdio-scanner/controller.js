@@ -415,7 +415,7 @@ export class Controller extends EventEmitter {
             filters.push({ talkgroup: options.talkgroup });
         }
 
-        const attributes = ['id', 'dateTime', 'system', 'talkgroup'];
+        const attributes = ['id', 'dateTime', 'system', 'talkgroup', 'frequencies', 'sources'];
 
         const date = options && typeof options.date === 'string' ? new Date(options.date) : null;
 
