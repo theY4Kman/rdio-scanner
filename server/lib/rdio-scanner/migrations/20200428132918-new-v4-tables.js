@@ -78,9 +78,9 @@ export default {
             }, { transaction });
 
             await queryInterface.sequelize.query([
-                'INSERT INTO `rdioScannerCalls2`',
-                'SELECT `id`,`audio`,`audioName`,`audioType`,`startTime`,`freqList`,`freq`,null,`srcList`,`system`,`talkgroup`',
-                'FROM `rdioScannerCalls`',
+                'INSERT INTO "rdioScannerCalls2"',
+                'SELECT "id","audio","audioName","audioType","startTime","freqList","freq",null,"srcList","system","talkgroup"',
+                'FROM "rdioScannerCalls"',
             ].join(' '), { transaction });
 
             await queryInterface.dropTable('rdioScannerCalls', { transaction });

@@ -139,9 +139,9 @@ export default {
             await queryInterface.addIndex('rdioScannerCalls2', ['dateTime', 'system', 'talkgroup'], { transaction });
 
             await queryInterface.sequelize.query([
-                'INSERT INTO `rdioScannerCalls2`',
-                'SELECT `id`,`audio`,`audioName`,`audioType`,`dateTime`,`frequencies`,`frequency`,`source`,`sources`,`system`,`talkgroup`',
-                'FROM `rdioScannerCalls`',
+                'INSERT INTO "rdioScannerCalls2"',
+                'SELECT "id","audio","audioName","audioType","dateTime","frequencies","frequency","source","sources","system","talkgroup"',
+                'FROM "rdioScannerCalls"',
             ].join(' '), { transaction });
 
             await queryInterface.dropTable('rdioScannerCalls', { transaction });
