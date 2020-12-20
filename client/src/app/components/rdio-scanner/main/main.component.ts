@@ -264,6 +264,10 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         this.appRdioScannerService.stop();
     }
 
+    play(id: string): void {
+        this.appRdioScannerService.loadAndPlay(id);
+    }
+
     private eventHandler(event: RdioScannerEvent): void {
         if ('auth' in event && event.auth) {
             let password: string | null = null;
