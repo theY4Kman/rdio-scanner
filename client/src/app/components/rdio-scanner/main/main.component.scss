@@ -125,7 +125,8 @@
       padding: 0 6px;
       text-align: start;
 
-      &:nth-child(1) {
+      &:nth-child(1),
+      &:nth-child(2) {
         width: 10%;
       }
 
