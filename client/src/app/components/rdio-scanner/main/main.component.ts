@@ -17,9 +17,10 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
+import { ShortcutInput } from 'ng-keyboard-shortcuts';
 import { Subscription, timer } from 'rxjs';
 import packageInfo from '../../../../../package.json';
 import {
@@ -43,7 +44,7 @@ const LOCAL_STORAGE_KEY = RdioScannerService.LOCAL_STORAGE_KEY + '-pin';
     ],
     templateUrl: './main.component.html',
 })
-export class RdioScannerMainComponent implements OnDestroy, OnInit {
+export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewInit {
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
 
@@ -85,6 +86,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     playbackMode = false;
 
+    shortcuts: ShortcutInput[] = [];
+
     @Output() openSearchPanel = new EventEmitter<void>();
 
     @Output() openSelectPanel = new EventEmitter<void>();
@@ -106,6 +109,36 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
+
+    ngAfterViewInit(): void {
+        this.shortcuts.push(
+            {
+                key: 'space',
+                label: 'Pause',
+                description: 'Pause/unpause feed',
+                command: () => this.pause(),
+                preventDefault: true,
+            },
+            {
+                key: 'l',
+                label: 'Live Feed',
+                description: 'Toggle live feed',
+                command: () => this.livefeed(),
+            },
+            {
+                key: ['n', 'right'],
+                label: 'Skip/Next',
+                description: 'Skip current call',
+                command: () => this.skip(),
+            },
+            {
+                key: ['p', 'left'],
+                label: 'Replay Last',
+                description: 'Replay last call',
+                command: () => this.replay(),
+            },
+        )
+    }
 
     authenticate(password = this.authForm.value.password): void {
         this.authForm.disable();
@@ -289,7 +322,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     play(id: string): void {
-        this.appRdioScannerService.loadAndPlay(id);
+        this.rdioScannerService.loadAndPlay(id);
     }
 
     private eventHandler(event: RdioScannerEvent): void {
