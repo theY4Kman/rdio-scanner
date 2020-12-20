@@ -86,6 +86,14 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
         this.appRdioScannerService.loadAndDownload(id);
     }
 
+    getCallDuration(call?: RdioScannerCall): number | undefined {
+        const durationRaw = call?.frequencies?.reduce((sum, {len}) => sum + (len || 0), 0);
+        if (durationRaw != null) {
+            return durationRaw / 10_000;
+        }
+        return;
+    }
+
     formChangeHandler(): void {
         if (this.livefeedPlayback) {
             this.appRdioScannerService.stopPlaybackMode();
