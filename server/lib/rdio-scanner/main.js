@@ -42,6 +42,7 @@ import rs003OptimizeCalls from './migrations/20191126135515-optimize-rdio-scanne
 import rs004NewV3Tables from './migrations/20191220093214-new-v3-tables.js';
 import rs005OptimizeCalls from './migrations/20200123094105-optimize-rdio-scanner-calls.js';
 import rs006NewV4Tables from './migrations/20200428132918-new-v4-tables.js';
+import rs006_2_AddAudioDurationCol from './migrations/20201228032605-add-duration.js';
 import rs007NewV51Tables from './migrations/20210115105958-new-v5.1-tables.js';
 
 const dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -53,6 +54,7 @@ const migrations = [
     { name: '20191220093214-new-v3-tables', up: rs004NewV3Tables.up, down: rs004NewV3Tables.down },
     { name: '20200123094105-optimize-rdio-scanner-calls', up: rs005OptimizeCalls.up, down: rs005OptimizeCalls.down },
     { name: '20200428132918-new-v4-tables', up: rs006NewV4Tables.up, down: rs006NewV4Tables.down },
+    { name: '20201228032605-add-duration', up: rs006_2_AddAudioDurationCol.up, down: rs006_2_AddAudioDurationCol.down },
     { name: '20210115105958-new-v5.1-tables', up: rs007NewV51Tables.up, down: rs007NewV51Tables.down },
 ];
 

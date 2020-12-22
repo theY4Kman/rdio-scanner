@@ -140,7 +140,7 @@ export default {
 
             await queryInterface.sequelize.query([
                 'INSERT INTO "rdioScannerCalls2"',
-                'SELECT "id","audio","audioName","audioType","dateTime","frequencies","frequency","source","sources","system","talkgroup"',
+                'SELECT "id","audio","audioName","audioType","audioDuration","dateTime","frequencies","frequency","source","sources","system","talkgroup"',
                 'FROM "rdioScannerCalls"',
             ].join(' '), { transaction });
 

@@ -79,6 +79,12 @@ export class Controller extends EventEmitter {
 
         this.websocket = null;
 
+        this.ffprobe = !spawnSync('ffprobe', ['-version']).error;
+
+        if (!this.ffprobe) {
+            console.warn('ffprobe is missing, no audio duration extraction possible.');
+        }
+
         if (!this.ffmpeg) {
             this.log.write(Log.warn, 'Controller: ffmpeg is missing, no audio conversion possible.');
         }
@@ -126,17 +132,12 @@ export class Controller extends EventEmitter {
                 }
 
                 const proc = spawn('ffmpeg', [
-                    '-i',
-                    '-',
+                    '-i', '-',
                     ...metadata,
-                    '-c:a',
-                    'aac',
-                    '-b:a',
-                    '32k',
-                    '-movflags',
-                    'frag_keyframe+empty_moov',
-                    '-f',
-                    'ipod',
+                    '-c:a', 'aac',
+                    '-b:a', '32k',
+                    '-movflags', 'frag_keyframe+empty_moov',
+                    '-f', 'ipod',
                     '-',
                 ]);
 
@@ -355,6 +356,45 @@ export class Controller extends EventEmitter {
         }, {});
     }
 
+    /**
+     * Return the duration of a call's audio clip, as milliseconds in an integer
+     *
+     * @param call
+     * @return {Promise<number>}
+     */
+    getCallDuration(call) {
+        return new Promise((resolve, reject) => {
+            if (!this.ffprobe) {
+                reject('No ffprobe available');
+
+                return;
+            }
+
+            if (Buffer.isBuffer(call && call.audio)) {
+                const proc = spawn('ffprobe', [
+                    '-show_entries', 'format=duration',  // only show duration
+                    '-v', 'quiet',
+                    '-of', 'csv=p=0',
+                    'pipe:0',  // read from stdin
+                ]);
+
+                proc.on('error', (error) => reject(error.message));
+
+                proc.stdin.on('error', (error) => {
+                    reject(error.message);
+                });
+
+                proc.stdout.on('data', data => resolve(Math.floor(parseFloat(data) * 1000)));
+
+                process.nextTick(() => {
+                    proc.stdin.setEncoding('binary');
+                    proc.stdin.write(call.audio);
+                    proc.stdin.end();
+                });
+            }
+        });
+    }
+
     async getCall(id, scope) {
         const where = scope !== null && typeof scope === 'object' ? {
             [Sequelize.Op.and]: [
@@ -415,7 +455,7 @@ export class Controller extends EventEmitter {
             filters.push({ talkgroup: options.talkgroup });
         }
 
-        const attributes = ['id', 'dateTime', 'system', 'talkgroup', 'frequencies', 'sources'];
+        const attributes = ['id', 'dateTime', 'system', 'talkgroup', 'frequencies', 'sources', 'audioDuration'];
 
         const date = options && typeof options.date === 'string' ? new Date(options.date) : null;
 
@@ -754,6 +794,12 @@ export class Controller extends EventEmitter {
                     `file=${call.audioName} ${error.message}`,
                 ].join(' '));
             }
+        }
+
+        try {
+            call.audioDuration = await this.getCallDuration(call);
+        } catch (error) {
+            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} duration: ${error.message}`);
         }
 
         let newCall;

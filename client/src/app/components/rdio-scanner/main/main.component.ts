@@ -503,6 +503,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
             this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call?.frequency);
 
+            this.callDuration = this.call.audioDuration || 0;
+
             if (Array.isArray(this.call.frequencies) && this.call.frequencies.length) {
                 const frequency = this.call.frequencies.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
 
@@ -511,8 +513,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 this.callFrequency = this.formatFrequency(typeof frequency.freq === 'number' ? frequency.freq : this.call.frequency);
 
                 this.callSpike = typeof frequency.spikeCount === 'number' ? `${frequency.spikeCount}` : '';
-
-                this.callDuration = this.getCallDuration(this.call) || 0;
 
             } else {
                 this.callError = '';

@@ -125,22 +125,21 @@
       padding: 0 6px;
       text-align: start;
 
-      &:nth-child(1),
-      &:nth-child(2) {
-        width: 10%;
+      &.time {
+        width: 7%;
+      }
+      &.duration {
+        width: 9%;
       }
 
-      &:nth-child(2) {
-        width: 25%;
+      &.name {
+        width: 50%;
       }
+    }
 
-      &:nth-child(3) {
-        width: 25%;
-      }
-
-      &:nth-child(4) {
-        width: 40%;
-      }
+    td.duration {
+      text-align: right;
+      padding-right: 1em;
     }
 
     th {

@@ -51,6 +51,12 @@ callFactory.schema = {
         type: Sequelize.DataTypes.STRING,
         allowNull: true,
     },
+    // Duration of clip, in milliseconds
+    audioDuration: {
+        type: Sequelize.DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false,
+    },
     dateTime: {
         type: Sequelize.DataTypes.DATE,
         allowNull: false,
