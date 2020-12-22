@@ -123,6 +123,18 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit, AfterView
                 description: 'Replay last call',
                 command: () => this.replay(),
             },
+            {
+                key: 'h s',
+                label: 'Hold System',
+                description: 'Hear only calls from the currently-playing system',
+                command: () => this.holdSystem(),
+            },
+            {
+                key: 'h g',
+                label: 'Hold Group',
+                description: 'Hear only calls from the currently-playing talkgroup',
+                command: () => this.holdTalkgroup(),
+            },
         )
     }
 
