@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { ShortcutInput } from 'ng-keyboard-shortcuts';
@@ -80,6 +80,8 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit, AfterView
 
     @Output() toggleFullscreen = new EventEmitter<void>();
 
+    @Input() isOpen = true;
+
     @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
     private clockTimer: Subscription | undefined;
@@ -135,7 +137,25 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit, AfterView
                 description: 'Hear only calls from the currently-playing talkgroup',
                 command: () => this.holdTalkgroup(),
             },
-        )
+            {
+                key: 'a',
+                label: 'Avoid',
+                description: 'Avoid calls from current talkgroup',
+                command: () => this.avoid(),
+            },
+            {
+                key: '/',
+                label: 'Search Call',
+                description: 'Open call search page',
+                command: () => this.showSearchPanel(),
+            },
+            {
+                key: 's',
+                label: 'Select Talkgroups',
+                description: 'Open talkgroup/systems select panel',
+                command: () => this.showSelectPanel(),
+            },
+        );
     }
 
     authenticate(password = this.authForm.value.password): void {

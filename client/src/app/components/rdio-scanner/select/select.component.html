@@ -1,3 +1,4 @@
+<ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!panel?.opened"></ng-keyboard-shortcuts>
 <fieldset class="fieldset">
     <div>
         <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status" title="{{ group.label }}"

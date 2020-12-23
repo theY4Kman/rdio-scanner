@@ -17,9 +17,11 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, Input, OnDestroy, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
+import { MatSidenav } from '@angular/material/sidenav';
+import { ShortcutInput } from 'ng-keyboard-shortcuts';
 import { BehaviorSubject } from 'rxjs';
 import {
     RdioScannerCall,
@@ -38,7 +40,7 @@ import { AppRdioScannerService } from '../rdio-scanner.service';
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
 })
-export class AppRdioScannerSearchComponent implements OnDestroy {
+export class AppRdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     call: RdioScannerCall | undefined;
     callPending: string | undefined;
 
@@ -66,6 +68,8 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
     results = new BehaviorSubject(new Array<RdioScannerCall | null>(10));
     resultsPending = false;
 
+    shortcuts: ShortcutInput[] = [];
+
     private config: RdioScannerConfig | undefined;
 
     private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
@@ -74,6 +78,8 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
 
     private offset = 0;
 
+    @Input() panel: MatSidenav | undefined;
+
     @ViewChild(MatPaginator, { read: MatPaginator }) private paginator: MatPaginator | undefined;
 
     constructor(
@@ -81,6 +87,20 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
+
+    ngAfterViewInit(): void {
+        this.shortcuts.push(
+            {
+                key: ['Escape', 'Backspace'],
+                label: 'Back',
+                description: 'Return to main panel',
+                command: () => {
+                    console.log('search', this.panel);
+                    return this.panel?.close();
+                },
+            },
+        );
+    }
 
     download(id: string): void {
         this.appRdioScannerService.loadAndDownload(id);

@@ -1,5 +1,5 @@
-<ng-keyboard-shortcuts [shortcuts]="shortcuts"></ng-keyboard-shortcuts>
-<ng-keyboard-shortcuts-help key="?"></ng-keyboard-shortcuts-help>
+<ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!isOpen"></ng-keyboard-shortcuts>
+<ng-keyboard-shortcuts-help key="?" closeKey="escape"></ng-keyboard-shortcuts-help>
 <div class="rdio-status">
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
@@ -83,7 +83,7 @@
                         <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
                     </td>
                     <td class="duration">
-                        <span *ngIf="previousCall">{{ previousCall.audioDuration / 1000 | number:'1.0-1' }}s</span>
+                        <span *ngIf="previousCall">{{ (previousCall.audioDuration || 0) / 1000 | number:'1.0-1' }}s</span>
                     </td>
                     <td class="system">
                         <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>
