@@ -1,4 +1,5 @@
-<fieldset *ngIf="groups?.length && (groups?.length || 0) >= 2" class="fieldset">
+<ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!panel?.opened"></ng-keyboard-shortcuts>
+<fieldset *ngIf="groups?.length && (groups?.length || 0) >= 2" class="fieldset" class="fieldset">
     <div>
         <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status" title="{{ group.label }}"
             (click)="toggleGroup(group.label)">

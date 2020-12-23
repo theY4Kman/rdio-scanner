@@ -17,9 +17,11 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, Input, OnDestroy, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
+import { MatSidenav } from '@angular/material/sidenav';
+import { ShortcutInput } from 'ng-keyboard-shortcuts';
 import { BehaviorSubject } from 'rxjs';
 import {
     RdioScannerCall,
@@ -38,7 +40,7 @@ import { RdioScannerService } from '../rdio-scanner.service';
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
 })
-export class RdioScannerSearchComponent implements OnDestroy {
+export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     call: RdioScannerCall | undefined;
     callPending: string | undefined;
 
@@ -66,6 +68,8 @@ export class RdioScannerSearchComponent implements OnDestroy {
     results = new BehaviorSubject(new Array<RdioScannerCall | null>(10));
     resultsPending = false;
 
+    shortcuts: ShortcutInput[] = [];
+
     private config: RdioScannerConfig | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
@@ -74,6 +78,8 @@ export class RdioScannerSearchComponent implements OnDestroy {
 
     private offset = 0;
 
+    @Input() panel: MatSidenav | undefined;
+
     @ViewChild(MatPaginator, { read: MatPaginator }) private paginator: MatPaginator | undefined;
 
     constructor(
@@ -81,6 +87,20 @@ export class RdioScannerSearchComponent implements OnDestroy {
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
+
+    ngAfterViewInit(): void {
+        this.shortcuts.push(
+            {
+                key: ['Escape', 'Backspace'],
+                label: 'Back',
+                description: 'Return to main panel',
+                command: () => {
+                    console.log('search', this.panel);
+                    return this.panel?.close();
+                },
+            },
+        );
+    }
 
     download(id: string): void {
         this.rdioScannerService.loadAndDownload(id);
@@ -442,9 +462,9 @@ export class RdioScannerSearchComponent implements OnDestroy {
 
             this.callPending = undefined;
 
-            this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
+            this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
             this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
-            this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
+            this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
             this.optionsTalkgroup = [];
         }
 
