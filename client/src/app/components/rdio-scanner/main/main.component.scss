@@ -158,6 +158,11 @@
 
     tbody > tr {
       border-top: 1px solid rgba(0, 0, 0, 0.2);
+      cursor: pointer;  // Rows may be clicked to begin playback
+
+      &:hover {
+        background-color: rgba(42, 14, 143, 0.62);
+      }
     }
   }
 }
