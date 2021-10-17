@@ -21,7 +21,7 @@ const PROXY_CONFIG = {
     "/": {
         "bypass": (req) => req.upgrade ? null : '/',
         "secure": false,
-        "target": "http://localhost:3000",
+        "target": "http://localhost:3333",
         "ws": true,
     },
 };

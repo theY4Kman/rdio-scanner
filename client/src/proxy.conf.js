@@ -19,7 +19,7 @@
 
 'use strict';
 
-const server = 'http://localhost:3000';
+const server = 'http://localhost:3333';
 
 const PROXY_CONFIG = [
     {
