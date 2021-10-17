@@ -139,13 +139,17 @@
 
     td.duration {
       text-align: right;
-      padding-right: 1em;
+      padding-right: 3px;
     }
 
     th {
       color: rgba(0, 0, 0, 0.4);
       font-weight: 400;
       text-transform: uppercase;
+
+      &.time, &.duration {
+        text-align: center;
+      }
     }
 
     tr {
