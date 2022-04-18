@@ -58,6 +58,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     callProgress = new Date(0, 0, 0, 0, 0, 0);
     callDuration = 0;
     callQueue = 0;
+    callQueueDuration = 0;
     callSpike = '0';
     callSystem = 'System';
     callTag = 'Tag';
@@ -453,6 +454,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
         if ('queue' in event) {
             this.callQueue = event.queue || 0;
+        }
+
+        if ('queueDuration' in event) {
+            this.callQueueDuration = event.queueDuration || 0;
         }
 
         if ('time' in event && typeof event.time === 'number') {

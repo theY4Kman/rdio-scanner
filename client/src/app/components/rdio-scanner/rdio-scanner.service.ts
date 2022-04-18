@@ -425,6 +425,10 @@ export class RdioScannerService implements OnDestroy {
             ? this.getPlaybackQueueCount()
             : this.callQueue.length;
 
+        const queueDuration = this.livefeedMode === RdioScannerLivefeedMode.Playback
+            ? this.getPlaybackQueueDuration()
+            : this.callQueue.map(call => call.audioDuration || 0).reduce((a, b) => a + b, 0);
+
         const arrayBuffer = new ArrayBuffer(this.call.audio.data.length);
         const arrayBufferView = new Uint8Array(arrayBuffer);
 
@@ -443,7 +447,7 @@ export class RdioScannerService implements OnDestroy {
             this.audioSource.onended = () => this.skip({ delay: true });
             this.audioSource.start();
 
-            this.event.emit({ call: this.call, queue });
+            this.event.emit({ call: this.call, queue, queueDuration });
 
             interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
@@ -457,7 +461,7 @@ export class RdioScannerService implements OnDestroy {
                 }
             });
         }, () => {
-            this.event.emit({ call: this.call, queue });
+            this.event.emit({ call: this.call, queue, queueDuration });
 
             this.skip({ delay: false });
         });
@@ -739,6 +743,35 @@ export class RdioScannerService implements OnDestroy {
         }
 
         return queueCount;
+    }
+
+    private getPlaybackQueueDuration(id = this.call?.id || this.callPrevious?.id): number {
+        let queueDuration = 0;
+
+        if (id && this.playbackList) {
+            const index = this.playbackList.results.findIndex((call) => call.id === id);
+
+            if (index !== -1) {
+                let calls: Array<RdioScannerCall>;
+
+                if (this.playbackList.options.sort === -1) {
+                    calls = this.playbackList.results.slice(this.playbackList.options.offset + index);
+                    queueDuration = (
+                        this.playbackList.results
+                            .slice(this.playbackList.options.offset + index)
+                            .map(call => call.audioDuration || 0)
+                            .reduce((a, b) => a + b, 0)
+                    );
+
+                } else {
+                    calls = this.playbackList.results.slice(this.playbackList.count - this.playbackList.options.offset - index - 1);
+                }
+
+                queueDuration = calls.map(call => call.audioDuration || 0).reduce((a, b) => a + b, 0);
+            }
+        }
+
+        return queueDuration;
     }
 
     private openWebsocket(): void {

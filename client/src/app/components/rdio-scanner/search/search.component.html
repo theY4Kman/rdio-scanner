@@ -41,7 +41,7 @@
                 <span>Duration</span>
             </mat-header-cell>
             <mat-cell *matCellDef="let row">
-                <span>{{ row?.audioDuration / 1000 | number:'1.0-1' }}s</span>
+                <span *ngIf="row?.audioDuration != null">{{ row?.audioDuration / 1000 | number:'1.0-1' }}s</span>
             </mat-cell>
         </ng-container>
         <ng-container matColumnDef="system">
