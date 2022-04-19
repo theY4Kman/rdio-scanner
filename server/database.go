@@ -127,6 +127,9 @@ func (db *Database) migrate() error {
 	if err == nil {
 		err = db.migration20220101070000(verbose)
 	}
+	if err == nil {
+		err = db.migration20220418033700(verbose)
+	}
 
 	return err
 }
@@ -457,6 +460,20 @@ func (db *Database) migration20220101070000(verbose bool) error {
 		}
 	}
 	return db.migrateWithSchema("20220101070000-v6.1.0", queries, verbose)
+}
+
+func (db *Database) migration20220418033700(verbose bool) error {
+	var queries []string
+	if db.Config.DbType == DbTypeSqlite {
+		queries = []string{
+			`ALTER TABLE "rdioScannerCalls" ADD COLUMN audioDuration REAL DEFAULT 0;`,
+		}
+	} else {
+		queries = []string{
+			`ALTER TABLE "rdioScannerCalls" DROP COLUMN audioDuration;`,
+		}
+	}
+	return db.migrateWithSchema("20220418033700-v6.1.0-add-duration-column", queries, verbose)
 }
 
 func (db *Database) prepareMigration() (bool, error) {

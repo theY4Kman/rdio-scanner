@@ -53,6 +53,7 @@ type DefaultOptions struct {
 	autoPopulate                bool
 	dimmerDelay                 uint
 	disableAudioConversion      bool
+	disableDurationCalculation  bool
 	disableDuplicateDetection   bool
 	duplicateDetectionTimeFrame uint
 	keypadBeeps                 string
@@ -95,6 +96,7 @@ var defaults Defaults = Defaults{
 		autoPopulate:                true,
 		dimmerDelay:                 5000,
 		disableAudioConversion:      false,
+		disableDurationCalculation:  false,
 		disableDuplicateDetection:   false,
 		duplicateDetectionTimeFrame: 500,
 		keypadBeeps:                 "uniden",

@@ -169,6 +169,17 @@ func (downstream *Downstream) Send(call *Call) error {
 		}
 	}
 
+	switch v := call.AudioDuration.(type) {
+	case float32:
+		if w, err := mw.CreateFormField("audioDuration"); err == nil {
+			if _, err = w.Write([]byte(fmt.Sprintf("%v", v))); err != nil {
+				return formatError(err)
+			}
+		} else {
+			return formatError(err)
+		}
+	}
+
 	if w, err := mw.CreateFormField("dateTime"); err == nil {
 		if _, err = w.Write([]byte(call.DateTime.Format(time.RFC3339))); err != nil {
 			return formatError(err)

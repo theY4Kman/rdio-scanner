@@ -12,6 +12,7 @@
         "@angular/platform-browser-dynamic": "~13.3.1",
         "@angular/router": "^13.3.1",
         "@angular/service-worker": "^13.3.1",
+        "@egoistdeveloper/ng-keyboard-shortcuts": "^13.1.23",
         "rxjs": "~7.4.0",
         "tslib": "^2.3.1",
         "zone.js": "~0.11.5"

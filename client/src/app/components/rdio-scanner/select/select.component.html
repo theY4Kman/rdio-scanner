@@ -1,6 +1,7 @@
-<fieldset *ngIf="categories?.length && (categories?.length || 0) >= 2" class="fieldset">
+<ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!panel?.opened"></ng-keyboard-shortcuts>
+<fieldset *ngIf="categories?.length && (categories?.length || 0) >= 2" class="fieldset" class="fieldset">
     <div>
-        <button *ngFor="let category of categories" class="rdio-button" [ngClass]="category.status"
+        <button *ngFor="let category of categories" class="rdio-button" [ngClass]="category.status" title="{{ category.label }}"
             (click)="toggle(category)">
             {{ category.label }}
         </button>
@@ -18,7 +19,7 @@
             {{ system.label }}
         </legend>
         <div>
-            <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
+            <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button" title="{{ talkgroup.label }}"
                 [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]), on: map[system.id] && map[system.id][talkgroup.id] }"
                 (click)="avoid({ system: system, talkgroup: talkgroup })">
                 {{ talkgroup.label }}

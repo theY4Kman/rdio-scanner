@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, OnDestroy } from '@angular/core';
+import { AfterViewInit, Component, Input, OnDestroy } from '@angular/core';
 import {
     RdioScannerAvoidOptions,
     RdioScannerBeepStyle,
@@ -28,6 +28,8 @@ import {
     RdioScannerSystem,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
+import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
+import { MatSidenav } from "@angular/material/sidenav";
 
 @Component({
     selector: 'rdio-scanner-select',
@@ -37,7 +39,7 @@ import { RdioScannerService } from '../rdio-scanner.service';
     ],
     templateUrl: './select.component.html',
 })
-export class RdioScannerSelectComponent implements OnDestroy {
+export class RdioScannerSelectComponent implements OnDestroy, AfterViewInit {
     categories: RdioScannerCategory[] | undefined;
 
     map: RdioScannerLivefeedMap = {};
@@ -46,9 +48,27 @@ export class RdioScannerSelectComponent implements OnDestroy {
 
     tagsToggle: boolean | undefined;
 
+    shortcuts: ShortcutInput[] = [];
+
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
+    @Input() panel: MatSidenav | undefined;
+
     constructor(private rdioScannerService: RdioScannerService) { }
+
+    ngAfterViewInit(): void {
+        this.shortcuts.push(
+            {
+                key: ['Escape', 'Backspace'],
+                label: 'Back',
+                description: 'Return to main panel',
+                command: () => {
+                    console.log(this.panel);
+                    return this.panel?.close();
+                },
+            },
+        );
+    }
 
     avoid(options?: RdioScannerAvoidOptions): void {
         if (options?.all == true) {

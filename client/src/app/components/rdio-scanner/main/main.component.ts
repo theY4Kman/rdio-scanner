@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { Subscription, timer } from 'rxjs';
@@ -32,6 +32,7 @@ import {
     RdioScannerLivefeedMode,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
+import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
 
 const LOCAL_STORAGE_KEY = RdioScannerService.LOCAL_STORAGE_KEY + '-pin';
 
@@ -43,7 +44,7 @@ const LOCAL_STORAGE_KEY = RdioScannerService.LOCAL_STORAGE_KEY + '-pin';
     ],
     templateUrl: './main.component.html',
 })
-export class RdioScannerMainComponent implements OnDestroy, OnInit {
+export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewInit {
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
 
@@ -55,6 +56,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
     callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
+    callDuration = 0;
     callQueue = 0;
     callSpike = '0';
     callSystem = 'System';
@@ -63,13 +65,13 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callTalkgroupId = '0';
     /*
         * BEGIN OF RED TAPE:
-        * 
+        *
         * By modifying, deleting or disabling the following lines, you harm
         * the open source project and its author.  Rdio Scanner represents a lot of
         * investment in time, support, testing and hardware.
-        * 
+        *
         * Be respectful, sponsor the project if you can, use native apps when possible.
-        * 
+        *
         */
     callTalkgroupName = `Rdio Scanner v${packageInfo.version}`;
     /**
@@ -101,6 +103,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     playbackMode = false;
 
+    shortcuts: ShortcutInput[] = [];
+
     get showListenersCount(): boolean {
         return this.config?.showListenersCount || false;
     }
@@ -110,6 +114,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     @Output() openSelectPanel = new EventEmitter<void>();
 
     @Output() toggleFullscreen = new EventEmitter<void>();
+
+    @Input() isOpen = true;
 
     @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
@@ -127,10 +133,74 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         private ngFormBuilder: FormBuilder,
     ) { }
 
+    ngAfterViewInit(): void {
+        this.shortcuts.push(
+            {
+                key: 'space',
+                label: 'Pause',
+                description: 'Pause/unpause feed',
+                command: () => this.pause(),
+                preventDefault: true,
+            },
+            {
+                key: 'l',
+                label: 'Live Feed',
+                description: 'Toggle live feed',
+                command: () => this.livefeed(),
+            },
+            {
+                key: ['n', 'right'],
+                label: 'Skip/Next',
+                description: 'Skip current call',
+                command: () => this.skip(),
+            },
+            {
+                key: ['p', 'left'],
+                label: 'Replay Last',
+                description: 'Replay last call',
+                command: () => this.replay(),
+            },
+            {
+                key: 'h s',
+                label: 'Hold System',
+                description: 'Hear only calls from the currently-playing system',
+                command: () => this.holdSystem(),
+            },
+            {
+                key: 'h g',
+                label: 'Hold Group',
+                description: 'Hear only calls from the currently-playing talkgroup',
+                command: () => this.holdTalkgroup(),
+            },
+            {
+                key: 'a',
+                label: 'Avoid',
+                description: 'Avoid calls from current talkgroup',
+                command: () => this.avoid(),
+            },
+            {
+                key: '/',
+                label: 'Search Call',
+                description: 'Open call search page',
+                command: () => this.showSearchPanel(),
+            },
+            {
+                key: 's',
+                label: 'Select Talkgroups',
+                description: 'Open talkgroup/systems select panel',
+                command: () => this.showSelectPanel(),
+            },
+        );
+    }
+
     authenticate(password = this.authForm.value.password): void {
         this.authForm.disable();
 
         this.rdioScannerService.authenticate(password);
+    }
+
+    play(id: number): void {
+        this.rdioScannerService.loadAndPlay(id);
     }
 
     authFocus(): void {
@@ -471,6 +541,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             this.callTalkgroup = this.call.talkgroupData?.label || `${this.call.talkgroup}`;
 
             this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call?.frequency);
+
+            this.callDuration = this.call.audioDuration || 0;
 
             if (Array.isArray(this.call.frequencies) && this.call.frequencies.length) {
                 const frequency = this.call.frequencies.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});

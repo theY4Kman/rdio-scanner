@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
@@ -32,13 +32,15 @@ import {
     RdioScannerTalkgroup,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
+import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
+import { MatSidenav } from "@angular/material/sidenav";
 
 @Component({
     selector: 'rdio-scanner-search',
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
 })
-export class RdioScannerSearchComponent implements OnDestroy, OnInit {
+export class RdioScannerSearchComponent implements OnDestroy, OnInit, AfterViewInit {
     call: RdioScannerCall | undefined;
     callPending: number | undefined;
 
@@ -66,6 +68,8 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit {
     results = new BehaviorSubject(new Array<RdioScannerCall | null>(10));
     resultsPending = false;
 
+    shortcuts: ShortcutInput[] = [];
+
     private config: RdioScannerConfig | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
@@ -74,6 +78,8 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit {
 
     private offset = 0;
 
+    @Input() panel: MatSidenav | undefined;
+
     @ViewChild(MatPaginator, { read: MatPaginator }) private paginator: MatPaginator | undefined;
 
     constructor(
@@ -81,6 +87,20 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit {
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
+
+    ngAfterViewInit(): void {
+        this.shortcuts.push(
+            {
+                key: ['Escape', 'Backspace'],
+                label: 'Back',
+                description: 'Return to main panel',
+                command: () => {
+                    console.log('search', this.panel);
+                    return this.panel?.close();
+                },
+            },
+        );
+    }
 
     download(id: number): void {
         this.rdioScannerService.loadAndDownload(id);

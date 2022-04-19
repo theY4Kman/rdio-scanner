@@ -31,6 +31,7 @@ type Call struct {
 	Audio          []byte      `json:"audio"`
 	AudioName      interface{} `json:"audioName"`
 	AudioType      interface{} `json:"audioType"`
+	AudioDuration  interface{} `json:"audioDuration"`
 	DateTime       time.Time   `json:"dateTime"`
 	Frequencies    interface{} `json:"frequencies"`
 	Frequency      interface{} `json:"frequency"`
@@ -91,16 +92,17 @@ func (call *Call) MarshalJSON() ([]byte, error) {
 			"data": json.RawMessage(audio),
 			"type": "Buffer",
 		},
-		"audioName":   call.AudioName,
-		"audioType":   call.AudioType,
-		"dateTime":    call.DateTime.Format(time.RFC3339),
-		"frequencies": call.Frequencies,
-		"frequency":   call.Frequency,
-		"patches":     call.Patches,
-		"source":      call.Source,
-		"sources":     call.Sources,
-		"system":      call.System,
-		"talkgroup":   call.Talkgroup,
+		"audioName":     call.AudioName,
+		"audioType":     call.AudioType,
+		"audioDuration": call.AudioDuration,
+		"dateTime":      call.DateTime.Format(time.RFC3339),
+		"frequencies":   call.Frequencies,
+		"frequency":     call.Frequency,
+		"patches":       call.Patches,
+		"source":        call.Source,
+		"sources":       call.Sources,
+		"system":        call.System,
+		"talkgroup":     call.Talkgroup,
 	})
 }
 
@@ -154,8 +156,8 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 
 	call := Call{}
 
-	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
+	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `audioDuration`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
+	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &call.AudioDuration, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
 	}
@@ -213,7 +215,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		query    string
 		rows     *sql.Rows
 		t        time.Time
-		where    string = "true"
+		where    = "true"
 	)
 
 	calls.mutex.Lock()
@@ -450,7 +452,15 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 		}
 	}
 
-	if res, err = db.Sql.Exec("insert into `rdioScannerCalls` (`id`, `audio`, `audioName`, `audioType`, `dateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup`) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", call.Id, call.Audio, call.AudioName, call.AudioType, call.DateTime, frequencies, call.Frequency, patches, call.Source, sources, call.System, call.Talkgroup); err != nil {
+	res, err = db.Sql.Exec(
+		`
+		insert into "rdioScannerCalls" 
+		    ("id", "audio", "audioName", "audioType", "audioDuration", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup") 
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`,
+		call.Id, call.Audio, call.AudioName, call.AudioType, call.AudioDuration, call.DateTime, frequencies, call.Frequency, patches, call.Source, sources, call.System, call.Talkgroup,
+	)
+	if err != nil {
 		return 0, formatError(err)
 	}
 

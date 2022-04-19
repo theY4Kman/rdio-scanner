@@ -1,3 +1,5 @@
+<ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!isOpen"></ng-keyboard-shortcuts>
+<ng-keyboard-shortcuts-help key="?" closeKey="escape"></ng-keyboard-shortcuts-help>
 <div class="rdio-status">
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
@@ -30,6 +32,7 @@
             <span>{{ callTalkgroup }}</span>
         </div>
         <div>
+            <span>{{ callDuration | number:'1.0-1' }}s</span> —
             <span>{{ callProgress | date:'HH:mm' }}</span>
         </div>
     </div>
@@ -78,8 +81,11 @@
         <table class="history">
             <thead>
                 <tr>
-                    <th>
-                        <span>Time</span>
+                    <th class="time">
+                        <span>⏰</span>
+                    </th>
+                    <th class="duration">
+                        <span>⏲</span>
                     </th>
                     <th>
                         <span>System</span>
@@ -93,9 +99,12 @@
                 </tr>
             </thead>
             <tbody>
-                <tr *ngFor="let previousCall of callHistory">
+                <tr *ngFor="let previousCall of callHistory" (click)="play(previousCall.id)">
                     <td>
                         <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
+                    </td>
+                    <td class="duration">
+                        <span *ngIf="previousCall">{{ previousCall.audioDuration | number:'1.0-1' }}s</span>
                     </td>
                     <td>
                         <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>

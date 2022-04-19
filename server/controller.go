@@ -32,29 +32,31 @@ import (
 )
 
 type Controller struct {
-	Admin        *Admin
-	Api          *Api
-	Calls        *Calls
-	Config       *Config
-	Database     *Database
-	Accesses     *Accesses
-	Apikeys      *Apikeys
-	Dirwatches   *Dirwatches
-	Downstreams  *Downstreams
-	Groups       *Groups
-	Logs         *Logs
-	Options      *Options
-	Scheduler    *Scheduler
-	Systems      *Systems
-	Tags         *Tags
-	Clients      *Clients
-	Register     chan *Client
-	Unregister   chan *Client
-	Ingest       chan *Call
-	ffmpeg       bool
-	ffmpegWarned bool
-	ingestMutex  sync.Mutex
-	running      bool
+	Admin         *Admin
+	Api           *Api
+	Calls         *Calls
+	Config        *Config
+	Database      *Database
+	Accesses      *Accesses
+	Apikeys       *Apikeys
+	Dirwatches    *Dirwatches
+	Downstreams   *Downstreams
+	Groups        *Groups
+	Logs          *Logs
+	Options       *Options
+	Scheduler     *Scheduler
+	Systems       *Systems
+	Tags          *Tags
+	Clients       *Clients
+	Register      chan *Client
+	Unregister    chan *Client
+	Ingest        chan *Call
+	ffmpeg        bool
+	ffmpegWarned  bool
+	ffprobe       bool
+	ffprobeWarned bool
+	ingestMutex   sync.Mutex
+	running       bool
 }
 
 func NewController(config *Config) *Controller {
@@ -131,11 +133,50 @@ func (controller *Controller) ConvertAudio(call *Call) {
 
 		switch v := call.AudioName.(type) {
 		case string:
-			call.AudioName = fmt.Sprintf("%v.m4a", strings.TrimSuffix(v, path.Ext((v))))
+			call.AudioName = fmt.Sprintf("%v.m4a", strings.TrimSuffix(v, path.Ext(v)))
 		}
 
 	} else {
 		fmt.Println(stderr.String())
+	}
+}
+
+func (controller *Controller) CalculateAudioDuration(call *Call) {
+
+	if !controller.ffprobe {
+		if !controller.ffprobeWarned {
+			controller.ffprobeWarned = true
+
+			controller.Logs.LogEvent(controller.Database, LogLevelWarn, "ffprobe is not available, no duration calculation can be performed.")
+		}
+		return
+	}
+
+	stdout := bytes.NewBuffer([]byte(nil))
+	stderr := bytes.NewBuffer([]byte(nil))
+
+	cmd := exec.Command(
+		"ffprobe",
+		"-show_entries", "format=duration", // only show duration
+		"-v", "error",
+		"-of", "csv=p=0",
+		"pipe:0", // read from stdin
+	)
+	cmd.Stdin = bytes.NewReader(call.Audio)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error calculating audio duration (%v): %v", stdout.String(), stderr.String())
+		return
+	}
+
+	rawDuration := strings.TrimSpace(stdout.String())
+	if duration, err := strconv.ParseFloat(rawDuration, 64); err == nil {
+		call.AudioDuration = duration
+	} else {
+		fmt.Println(fmt.Sprintf("Error parsing audio duration (%v): %v", stdout.String(), err))
+		return
 	}
 }
 
@@ -347,6 +388,10 @@ func (controller *Controller) IngestCall(call *Call) {
 
 	if !controller.Options.DisableAudioConversion {
 		controller.ConvertAudio(call)
+	}
+
+	if !controller.Options.DisableDurationCalculation {
+		controller.CalculateAudioDuration(call)
 	}
 
 	if id, err = controller.Calls.WriteCall(call, controller.Database); err == nil {
@@ -592,13 +637,8 @@ func (controller *Controller) Start() error {
 		return err
 	}
 
-	cmd := exec.Command("ffmpeg", "-version")
-	if err := cmd.Run(); err == nil {
-		controller.ffmpeg = true
-
-	} else {
-		controller.ffmpeg = false
-	}
+	controller.ffmpeg = exec.Command("ffmpeg", "-version").Run() == nil
+	controller.ffprobe = exec.Command("ffprobe", "-version").Run() == nil
 
 	go func() {
 		c := make(chan os.Signal, 1)

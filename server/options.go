@@ -28,6 +28,7 @@ type Options struct {
 	AutoPopulate                bool   `json:"autoPopulate"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
 	DisableAudioConversion      bool   `json:"disableAudioConversion"`
+	DisableDurationCalculation  bool   `json:"disableDurationCalculation"`
 	DisableDuplicateDetection   bool   `json:"disableDuplicateDetection"`
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
@@ -79,6 +80,13 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.DisableDuplicateDetection = v
 	default:
 		options.DisableDuplicateDetection = defaults.options.disableDuplicateDetection
+	}
+
+	switch v := m["disableDurationCalculation"].(type) {
+	case bool:
+		options.DisableDurationCalculation = v
+	default:
+		options.DisableDurationCalculation = defaults.options.disableDurationCalculation
 	}
 
 	switch v := m["duplicateDetectionTimeFrame"].(type) {

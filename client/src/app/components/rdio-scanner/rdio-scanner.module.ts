@@ -26,6 +26,7 @@ import { RdioScannerMainComponent } from './main/main.component';
 import { RdioScannerNativeModule } from './native/native.module';
 import { RdioScannerSearchComponent } from './search/search.component';
 import { RdioScannerSelectComponent } from './select/select.component';
+import { KeyboardShortcutsModule } from '@egoistdeveloper/ng-keyboard-shortcuts';
 
 @NgModule({
     declarations: [
@@ -35,7 +36,11 @@ import { RdioScannerSelectComponent } from './select/select.component';
         RdioScannerSelectComponent,
     ],
     exports: [RdioScannerComponent],
-    imports: [AppSharedModule, RdioScannerNativeModule],
+    imports: [
+      AppSharedModule,
+      RdioScannerNativeModule,
+      KeyboardShortcutsModule.forRoot(),
+    ],
     providers: [
         RdioScannerService,
         { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
