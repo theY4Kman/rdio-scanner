@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -40,8 +39,6 @@ func main() {
 		addr     string
 		port     string
 		hostname string
-		sslAddr  string
-		sslPort  string
 	)
 
 	config := NewConfig()
@@ -92,17 +89,6 @@ func main() {
 	}
 	if len(addr) == 0 {
 		addr = defaultAddr
-	}
-
-	if s := strings.Split(config.SslListen, ":"); len(s) > 1 {
-		sslAddr = s[0]
-		sslPort = s[1]
-	} else {
-		sslAddr = s[0]
-		sslPort = "3000"
-	}
-	if len(sslAddr) == 0 {
-		sslAddr = defaultAddr
 	}
 
 	http.HandleFunc("/api/admin/config", controller.Admin.ConfigHandler)
@@ -181,17 +167,6 @@ func main() {
 		log.Printf("main interface at http://%s:%s", hostname, port)
 	}
 
-	sslPrintInfo := func() {
-		if sslPort == "443" {
-			log.Printf("main interface at https://%s", hostname)
-			log.Printf("admin interface at https://%s/admin", hostname)
-
-		} else {
-			log.Printf("main interface at https://%s:%s", hostname, sslPort)
-			log.Printf("admin interface at https://%s:%s/admin", hostname, sslPort)
-		}
-	}
-
 	newServer := func(addr string, tlsConfig *tls.Config) *http.Server {
 		s := &http.Server{
 			Addr:         addr,
@@ -205,39 +180,7 @@ func main() {
 
 		return s
 	}
-
-	if len(config.SslCertFile) > 0 && len(config.SslKeyFile) > 0 {
-		go func() {
-			sslPrintInfo()
-
-			sslCert := config.GetSslCertFilePath()
-			sslKey := config.GetSslKeyFilePath()
-
-			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), nil)
-
-			if err := server.ListenAndServeTLS(sslCert, sslKey); err != nil {
-				log.Fatal(err)
-			}
-		}()
-
-	} else if config.SslAutoCert != "" {
-		go func() {
-			sslPrintInfo()
-
-			manager := &autocert.Manager{
-				Cache:      autocert.DirCache("autocert"),
-				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(config.SslAutoCert),
-			}
-
-			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), manager.TLSConfig())
-
-			if err := server.ListenAndServeTLS("", ""); err != nil {
-				log.Fatal(err)
-			}
-		}()
-
-	} else if port == "80" {
+	if port == "80" {
 		log.Printf("admin interface at http://%s/admin", hostname)
 
 	} else {

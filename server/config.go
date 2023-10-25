@@ -45,12 +45,6 @@ type Config struct {
 	DbUsername       string
 	DbPassword       string
 	Listen           string
-	SslAutoCert      string
-	SslCaCertFile    string
-	SslCaKeyFile     string
-	SslCertFile      string
-	SslKeyFile       string
-	SslListen        string
 	daemon           *Daemon
 	newAdminPassword string
 }
@@ -99,10 +93,6 @@ func NewConfig() *Config {
 	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
 	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
 	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
-	flag.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
-	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
-	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
-	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
 	flag.Parse()
 
 	if !config.isBaseDirWritable() {
@@ -156,22 +146,6 @@ func NewConfig() *Config {
 			if v := cfg.Section("").Key("listen").String(); len(v) > 0 {
 				config.Listen = v
 			}
-
-			if v := cfg.Section("").Key("ssl_auto_cert").String(); len(v) > 0 {
-				config.SslAutoCert = v
-			}
-
-			if v := cfg.Section("").Key("ssl_cert_file").String(); len(v) > 0 {
-				config.SslCertFile = v
-			}
-
-			if v := cfg.Section("").Key("ssl_key_file").String(); len(v) > 0 {
-				config.SslKeyFile = v
-			}
-
-			if v := cfg.Section("").Key("ssl_listen").String(); len(v) > 0 {
-				config.SslListen = v
-			}
 		}
 
 		if !(config.DbType == DbTypeMariadb || config.DbType == DbTypeMysql || config.DbType == DbTypeSqlite) {
@@ -204,22 +178,6 @@ func (config *Config) GetPath(p string) string {
 		return p
 	}
 	return filepath.Join(config.BaseDir, p)
-}
-
-func (config *Config) GetSslCaCertFilePath() string {
-	return config.GetPath(config.SslCaCertFile)
-}
-
-func (config *Config) GetSslCaKeyFilePath() string {
-	return config.GetPath(config.SslCaKeyFile)
-}
-
-func (config *Config) GetSslCertFilePath() string {
-	return config.GetPath(config.SslCertFile)
-}
-
-func (config *Config) GetSslKeyFilePath() string {
-	return config.GetPath(config.SslKeyFile)
 }
 
 func (config *Config) isBaseDirWritable() bool {
@@ -267,22 +225,6 @@ func (config *Config) saveConfig() error {
 
 	if config.Listen != "" {
 		ini = append(ini, fmt.Sprintf("listen = %s", config.Listen))
-	}
-
-	if config.SslAutoCert != "" {
-		ini = append(ini, fmt.Sprintf("ssl_auto_cert = %s", config.SslAutoCert))
-	}
-
-	if config.SslCertFile != "" {
-		ini = append(ini, fmt.Sprintf("ssl_cert_file = %s", config.SslCertFile))
-	}
-
-	if config.SslKeyFile != "" {
-		ini = append(ini, fmt.Sprintf("ssl_key_file = %s", config.SslKeyFile))
-	}
-
-	if config.SslListen != "" {
-		ini = append(ini, fmt.Sprintf("ssl_listen = %s", config.SslListen))
 	}
 
 	file, err := os.Create(config.GetConfigFilePath())
