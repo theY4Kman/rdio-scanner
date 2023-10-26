@@ -96,7 +96,6 @@ export interface RdioScannerConfig {
     afs?: string;
     branding?: string;
     dimmerDelay: number | false;
-    email?: string;
     groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
     playbackGoesLive: boolean;

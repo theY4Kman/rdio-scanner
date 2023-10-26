@@ -467,10 +467,6 @@ func (controller *Controller) ProcessMessageCommandVersion(client *Client) {
 		p["branding"] = controller.Options.Branding
 	}
 
-	if len(controller.Options.Email) > 0 {
-		p["email"] = controller.Options.Email
-	}
-
 	client.Send <- &Message{Command: MessageCommandVersion, Payload: p}
 }
 

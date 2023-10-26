@@ -34,7 +34,6 @@ import {
     RdioScannerLivefeedMode,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
-import { RdioScannerSupportComponent } from './support/support.component';
 
 @Component({
     selector: 'rdio-scanner-main',
@@ -74,8 +73,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     clock = new Date();
 
     dimmer = false;
-
-    email = '';
 
     holdSys = false;
     holdTg = false;
@@ -370,13 +367,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.updateDimmer();
     }
 
-    showHelp(): void {
-        this.matSnackBar.openFromComponent(RdioScannerSupportComponent, {
-            data: { email: this.email },
-            panelClass: 'snackbar-white',
-        });
-    }
-
     showSearchPanel(): void {
         if (!this.config) {
             return;
@@ -455,8 +445,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             this.config = event.config;
 
             this.branding = this.config?.branding ?? '';
-
-            this.email = this.config?.email ?? '';
 
             this.timeFormat = this.config?.time12hFormat ? 'h:mm a' : 'HH:mm';
 
