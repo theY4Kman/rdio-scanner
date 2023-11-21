@@ -378,6 +378,14 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
+	numResults := searchResults.Count
+	if numResults > limit {
+		numResults = limit
+	}
+
+	// Pre-allocate the slice to avoid costly allocations/resizing
+	searchResults.Results = make([]CallsSearchResult, 0, numResults)
+
 	for rows.Next() {
 		searchResult := CallsSearchResult{}
 		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup, &searchResult.AudioDuration); err != nil {
