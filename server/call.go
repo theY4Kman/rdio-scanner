@@ -235,7 +235,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	if client.Access != nil {
 		switch v := client.Access.Systems.(type) {
 		case []interface{}:
-			a := []string{}
+			var a []string
 			for _, scope := range v {
 				var c string
 				switch v := scope.(type) {
@@ -278,7 +278,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 	switch v := searchOptions.Group.(type) {
 	case string:
-		a := []string{}
+		var a []string
 		for id, m := range client.GroupsMap[v] {
 			b := strings.ReplaceAll(fmt.Sprintf("%v", m), " ", ", ")
 			b = strings.ReplaceAll(b, "[", "(")
@@ -292,7 +292,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 	switch v := searchOptions.Tag.(type) {
 	case string:
-		a := []string{}
+		var a []string
 		for id, m := range client.TagsMap[v] {
 			b := strings.ReplaceAll(fmt.Sprintf("%v", m), " ", ", ")
 			b = strings.ReplaceAll(b, "[", "(")
@@ -305,7 +305,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	}
 
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` asc limit 1", where)
-	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
+	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
@@ -317,7 +317,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		searchResults.DateStart = t
 	}
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` desc limit 1", where)
-	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
+	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
@@ -339,7 +339,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	switch v := searchOptions.Date.(type) {
 	case time.Time:
 		var (
-			df    string = client.Controller.Database.DateTimeFormat
+			df    = client.Controller.Database.DateTimeFormat
 			start time.Time
 			stop  time.Time
 		)
@@ -369,18 +369,18 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	}
 
 	query = fmt.Sprintf("select count(*) from `rdioScannerCalls` where %v", where)
-	if err = db.Sql.QueryRow(query).Scan(&searchResults.Count); err != nil && err != sql.ErrNoRows {
+	if err = db.Sql.QueryRow(query).Scan(&searchResults.Count); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	query = fmt.Sprintf("select `id`, `DateTime`, `system`, `talkgroup` from `rdioScannerCalls` where %v order by `dateTime` %v limit %v offset %v", where, order, limit, offset)
-	if rows, err = db.Sql.Query(query); err != nil && err != sql.ErrNoRows {
+	query = fmt.Sprintf("select `id`, `DateTime`, `system`, `talkgroup`, `audioDuration` from `rdioScannerCalls` where %v order by `dateTime` %v limit %v offset %v", where, order, limit, offset)
+	if rows, err = db.Sql.Query(query); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
 	for rows.Next() {
 		searchResult := CallsSearchResult{}
-		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
+		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup, &searchResult.AudioDuration); err != nil {
 			break
 		}
 
@@ -530,10 +530,11 @@ func (searchOptions *CallsSearchOptions) fromMap(m map[string]interface{}) error
 }
 
 type CallsSearchResult struct {
-	Id        uint      `json:"id"`
-	DateTime  time.Time `json:"dateTime"`
-	System    uint      `json:"system"`
-	Talkgroup uint      `json:"talkgroup"`
+	Id            uint      `json:"id"`
+	DateTime      time.Time `json:"dateTime"`
+	System        uint      `json:"system"`
+	Talkgroup     uint      `json:"talkgroup"`
+	AudioDuration float32   `json:"audioDuration"`
 }
 
 type CallsSearchResults struct {
