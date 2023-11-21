@@ -57,17 +57,16 @@ export class RdioScannerSelectComponent implements OnDestroy, AfterViewInit {
     constructor(private rdioScannerService: RdioScannerService) { }
 
     ngAfterViewInit(): void {
-        this.shortcuts.push(
-            {
-                key: ['Escape', 'Backspace'],
-                label: 'Back',
-                description: 'Return to main panel',
-                command: () => {
-                    console.log(this.panel);
-                    return this.panel?.close();
-                },
-            },
-        );
+      this.shortcuts.push(
+        ...['Escape', 'Backspace'].map((key) => ({
+          key,
+          label: 'Back',
+          description: 'Return to main panel',
+          command: () => {
+            return this.panel?.close();
+          },
+        })),
+      );
     }
 
     avoid(options?: RdioScannerAvoidOptions): void {

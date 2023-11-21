@@ -90,15 +90,14 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit, AfterViewI
 
     ngAfterViewInit(): void {
         this.shortcuts.push(
-            {
-                key: ['Escape', 'Backspace'],
-                label: 'Back',
-                description: 'Return to main panel',
-                command: () => {
-                    console.log('search', this.panel);
-                    return this.panel?.close();
-                },
+          ...['Escape', 'Backspace'].map((key) => ({
+            key,
+            label: 'Back',
+            description: 'Return to main panel',
+            command: () => {
+              return this.panel?.close();
             },
+          })),
         );
     }
 
