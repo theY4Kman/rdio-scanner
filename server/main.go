@@ -18,12 +18,13 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"mime"
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -60,7 +61,7 @@ func main() {
 				log.Fatal(err)
 			}
 
-			controller.Logs.LogEvent(controller.Database, LogLevelInfo, "admin password changed.")
+			controller.Logs.LogEvent(LogLevelInfo, "admin password changed.")
 
 			os.Exit(0)
 
@@ -82,7 +83,7 @@ func main() {
 		hostname = defaultAddr
 	}
 
-	if s := strings.Split(controller.Config.Listen, ":"); len(s) > 1 {
+	if s := strings.Split(config.Listen, ":"); len(s) > 1 {
 		addr = s[0]
 		port = s[1]
 	} else {
@@ -93,7 +94,7 @@ func main() {
 		addr = defaultAddr
 	}
 
-	if s := strings.Split(controller.Config.SslListen, ":"); len(s) > 1 {
+	if s := strings.Split(config.SslListen, ":"); len(s) > 1 {
 		sslAddr = s[0]
 		sslPort = s[1]
 	} else {
@@ -113,6 +114,10 @@ func main() {
 	http.HandleFunc("/api/admin/logs", controller.Admin.LogsHandler)
 
 	http.HandleFunc("/api/admin/password", controller.Admin.PasswordHandler)
+
+	http.HandleFunc("/api/admin/user-add", controller.Admin.UserAddHandler)
+
+	http.HandleFunc("/api/admin/user-remove", controller.Admin.UserRemoveHandler)
 
 	http.HandleFunc("/api/call-upload", controller.Api.CallUploadHandler)
 
@@ -136,7 +141,7 @@ func main() {
 			}
 
 			client := &Client{}
-			if err = client.Init(controller, conn); err != nil {
+			if err = client.Init(controller, r, conn); err != nil {
 				log.Println(err)
 			}
 
@@ -191,9 +196,9 @@ func main() {
 		s := &http.Server{
 			Addr:         addr,
 			TLSConfig:    tlsConfig,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
-			ErrorLog:     log.New(ioutil.Discard, "", 0),
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			ErrorLog:     log.New(io.Discard, "", 0),
 		}
 
 		s.SetKeepAlivesEnabled(true)
@@ -201,12 +206,12 @@ func main() {
 		return s
 	}
 
-	if len(controller.Config.SslCertFile) > 0 && len(controller.Config.SslKeyFile) > 0 {
+	if len(config.SslCertFile) > 0 && len(config.SslKeyFile) > 0 {
 		go func() {
 			sslPrintInfo()
 
-			sslCert := controller.Config.GetSslCertFilePath()
-			sslKey := controller.Config.GetSslKeyFilePath()
+			sslCert := config.GetSslCertFilePath()
+			sslKey := config.GetSslKeyFilePath()
 
 			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), nil)
 
@@ -215,14 +220,14 @@ func main() {
 			}
 		}()
 
-	} else if controller.Config.SslAutoCert != "" {
+	} else if config.SslAutoCert != "" {
 		go func() {
 			sslPrintInfo()
 
 			manager := &autocert.Manager{
 				Cache:      autocert.DirCache("autocert"),
 				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(controller.Config.SslAutoCert),
+				HostPolicy: autocert.HostWhitelist(config.SslAutoCert),
 			}
 
 			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), manager.TLSConfig())
@@ -244,4 +249,20 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func GetRemoteAddr(r *http.Request) string {
+	re := regexp.MustCompile(`(.+):.*$`)
+
+	for _, addr := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
+		if ip := re.ReplaceAllString(addr, "$1"); len(ip) > 0 {
+			return ip
+		}
+	}
+
+	if ip := re.ReplaceAllString(r.RemoteAddr, "$1"); len(ip) > 0 {
+		return ip
+	}
+
+	return r.RemoteAddr
 }

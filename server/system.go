@@ -30,9 +30,9 @@ type System struct {
 	AutoPopulate bool        `json:"autoPopulate"`
 	Blacklists   Blacklists  `json:"blacklists"`
 	Label        string      `json:"label"`
-	Led          interface{} `json:"led"`
+	Led          any         `json:"led"`
 	Order        uint        `json:"order"`
-	RowId        interface{} `json:"_id"`
+	RowId        any         `json:"_id"`
 	Talkgroups   *Talkgroups `json:"talkgroups"`
 	Units        *Units      `json:"units"`
 }
@@ -44,7 +44,7 @@ func NewSystem() *System {
 	}
 }
 
-func (system *System) FromMap(m map[string]interface{}) {
+func (system *System) FromMap(m map[string]any) *System {
 	switch v := m["_id"].(type) {
 	case float64:
 		system.RowId = uint(v)
@@ -81,17 +81,19 @@ func (system *System) FromMap(m map[string]interface{}) {
 	}
 
 	switch v := m["talkgroups"].(type) {
-	case []interface{}:
+	case []any:
 		system.Talkgroups.FromMap(v)
 	}
 
 	switch v := m["units"].(type) {
-	case []interface{}:
+	case []any:
 		system.Units.FromMap(v)
 	}
+
+	return system
 }
 
-type SystemMap map[string]interface{}
+type SystemMap map[string]any
 
 type Systems struct {
 	List  []*System
@@ -105,7 +107,7 @@ func NewSystems() *Systems {
 	}
 }
 
-func (systems *Systems) FromMap(f []interface{}) {
+func (systems *Systems) FromMap(f []any) *Systems {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
@@ -113,12 +115,14 @@ func (systems *Systems) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			system := NewSystem()
 			system.FromMap(m)
 			systems.List = append(systems.List, system)
 		}
 	}
+
+	return systems
 }
 
 func (systems *Systems) GetNewSystemId() uint {
@@ -137,7 +141,7 @@ NextId:
 	return 0
 }
 
-func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
+func (systems *Systems) GetSystem(f any) (system *System, ok bool) {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
@@ -183,10 +187,10 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 				}
 			}
 
-		case []interface{}:
+		case []any:
 			for _, fSystem := range v {
 				switch v := fSystem.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					var (
 						mSystemId   = v["id"]
 						mTalkgroups = v["talkgroups"]
@@ -212,7 +216,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 							continue
 						}
 
-					case []interface{}:
+					case []any:
 						rawSystem := *system
 						rawSystem.Talkgroups = NewTalkgroups()
 						for _, fTalkgroupId := range v {
@@ -292,6 +296,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 		systemMap := SystemMap{
 			"id":         rawSystem.Id,
 			"label":      rawSystem.Label,
+			"order":      rawSystem.Order,
 			"talkgroups": talkgroupsMap,
 			"units":      rawSystem.Units.List,
 		}
@@ -407,39 +412,6 @@ func (systems *Systems) Write(db *Database) error {
 		return fmt.Errorf("systems.write: %v", err)
 	}
 
-	for _, system := range systems.List {
-		if len(system.Blacklists) > 0 {
-			blacklists = strings.Join([]string{"[", system.Blacklists.String(), "]"}, "")
-		} else {
-			blacklists = "[]"
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerSystems` where `_id` = ?", system.RowId).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`) values (?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, system.RowId); err != nil {
-			break
-		}
-
-		if err = system.Talkgroups.Write(db, system.Id); err != nil {
-			return err
-		}
-
-		if err = system.Units.Write(db, system.Id); err != nil {
-			return err
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id`, `id` from `rdioScannerSystems`"); err != nil {
 		return formatError(err)
 	}
@@ -452,7 +424,7 @@ func (systems *Systems) Write(db *Database) error {
 		}
 		remove := true
 		for _, system := range systems.List {
-			if system.RowId == nil || system.RowId == rowId {
+			if system.RowId == nil || (system.RowId == rowId && system.Id == systemId) {
 				remove = false
 				break
 			}
@@ -495,6 +467,39 @@ func (systems *Systems) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, system := range systems.List {
+		if len(system.Blacklists) > 0 {
+			blacklists = strings.Join([]string{"[", system.Blacklists.String(), "]"}, "")
+		} else {
+			blacklists = "[]"
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerSystems` where `_id` = ?", system.RowId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`) values (?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, system.RowId); err != nil {
+			break
+		}
+
+		if err = system.Talkgroups.Write(db, system.Id); err != nil {
+			return err
+		}
+
+		if err = system.Units.Write(db, system.Id); err != nil {
+			return err
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

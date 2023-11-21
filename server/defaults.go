@@ -51,18 +51,20 @@ type DefaultDownstream struct {
 
 type DefaultOptions struct {
 	autoPopulate                bool
+	audioConversion             uint
 	dimmerDelay                 uint
-	disableAudioConversion      bool
 	disableDurationCalculation  bool
 	disableDuplicateDetection   bool
 	duplicateDetectionTimeFrame uint
 	keypadBeeps                 string
 	maxClients                  uint
+	playbackGoesLive            bool
 	pruneDays                   uint
 	searchPatchedTalkgroups     bool
 	showListenersCount          bool
 	sortTalkgroups              bool
 	tagsToggle                  bool
+	time12hFormat               bool
 }
 
 var defaults Defaults = Defaults{
@@ -90,22 +92,25 @@ var defaults Defaults = Defaults{
 		"Fire",
 		"Interop",
 		"Law",
+		"Unknown",
 	},
 	keypadBeeps: "uniden",
 	options: DefaultOptions{
+		audioConversion:             AUDIO_CONVERSION_ENABLED,
 		autoPopulate:                true,
 		dimmerDelay:                 5000,
-		disableAudioConversion:      false,
 		disableDurationCalculation:  false,
 		disableDuplicateDetection:   false,
 		duplicateDetectionTimeFrame: 500,
 		keypadBeeps:                 "uniden",
 		maxClients:                  200,
+		playbackGoesLive:            false,
 		pruneDays:                   7,
 		searchPatchedTalkgroups:     false,
 		showListenersCount:          false,
 		sortTalkgroups:              false,
 		tagsToggle:                  false,
+		time12hFormat:               false,
 	},
 	systems: []System{},
 	tags: []string{
@@ -117,5 +122,6 @@ var defaults Defaults = Defaults{
 		"Interop",
 		"Security",
 		"Service",
+		"Untagged",
 	},
 }

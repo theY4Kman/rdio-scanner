@@ -23,7 +23,7 @@ import { timer } from 'rxjs';
 
 @Component({
     selector: 'RdioScannerNative',
-    styleUrls: ['./native.scss'],
+    styleUrls: ['./native.component.scss'],
     templateUrl: './native.component.html',
 })
 export class RdioScannerNativeComponent implements OnInit {
@@ -34,8 +34,7 @@ export class RdioScannerNativeComponent implements OnInit {
     isAndroid: boolean = false;
     isApple: boolean = false;
 
-    constructor(@Optional() private matSnackBarRef: MatSnackBarRef<RdioScannerNativeComponent>) {
-    }
+    constructor(@Optional() private matSnackBarRef: MatSnackBarRef<RdioScannerNativeComponent>) { }
 
     ngOnInit(): void {
         const ua = navigator.userAgent;

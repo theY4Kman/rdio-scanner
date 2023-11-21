@@ -1,12 +1,13 @@
 <ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!isOpen"></ng-keyboard-shortcuts>
 <ng-keyboard-shortcuts-help key="?"></ng-keyboard-shortcuts-help>
 <div class="rdio-status">
+    <div class="branding">{{ branding }}</div>
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
     <div class="row">
         <div>
-            <span>{{ clock | date:'HH:mm' }}</span>
+            <span>{{ clock | date:timeFormat }}</span>
         </div>
         <div *ngIf="!linked">
             <span>NO LINK</span>
@@ -33,7 +34,8 @@
         </div>
         <div>
             <span>{{ callDuration | number:'1.0-1' }}s</span> —
-            <span>{{ callProgress | date:'HH:mm' }}</span>
+            <span>{{ callDate | date:'MM/dd' }} </span>
+            <span>{{ callProgress | date:timeFormat }}</span>
         </div>
     </div>
     <div class="row big">
@@ -56,6 +58,9 @@
         </div>
     </div>
     <div class="row right small">
+        <div *ngIf="tempAvoid">
+            <span class="flag" [ngClass]="{ flaged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
+        </div>
         <div>
             <span class="flag" [ngClass]="{ flaged: avoided }">AVOID</span>
         </div>
@@ -99,9 +104,11 @@
                 </tr>
             </thead>
             <tbody>
-                <tr *ngFor="let previousCall of callHistory" (click)="play(previousCall.id)">
+                <tr *ngFor="let previousCall of callHistory"
+                    [ngClass]="{ 'replaying': previousCall?.id !== null && previousCall?.id === call?.id}"
+                    (click)="play(previousCall.id)">
                     <td>
-                        <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
+                        <span>{{ previousCall?.dateTime | date:timeFormat }}</span>
                     </td>
                     <td class="duration">
                         <span *ngIf="previousCall">{{ previousCall.audioDuration | number:'1.0-1' }}s</span>
@@ -161,4 +168,9 @@
             SELECT<br>TG
         </button>
     </div>
+</div>
+<div class="rdio-help" *ngIf="email">
+    <button mat-icon-button (click)="showHelp()">
+        <mat-icon>help_center</mat-icon>
+    </button>
 </div>

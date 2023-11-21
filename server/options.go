@@ -25,24 +25,36 @@ import (
 )
 
 type Options struct {
+	AfsSystems                  string `json:"afsSystems"`
+	AudioConversion             uint   `json:"audioConversion"`
 	AutoPopulate                bool   `json:"autoPopulate"`
+	Branding                    string `json:"branding"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
-	DisableAudioConversion      bool   `json:"disableAudioConversion"`
 	DisableDurationCalculation  bool   `json:"disableDurationCalculation"`
 	DisableDuplicateDetection   bool   `json:"disableDuplicateDetection"`
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
+	Email                       string `json:"email"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
 	MaxClients                  uint   `json:"maxClients"`
+	PlaybackGoesLive            bool   `json:"playbackGoesLive"`
 	PruneDays                   uint   `json:"pruneDays"`
 	SearchPatchedTalkgroups     bool   `json:"searchPatchedTalkgroups"`
 	ShowListenersCount          bool   `json:"showListenersCount"`
 	SortTalkgroups              bool   `json:"sortTalkgroups"`
 	TagsToggle                  bool   `json:"tagsToggle"`
+	Time12hFormat               bool   `json:"time12hFormat"`
 	adminPassword               string
 	adminPasswordNeedChange     bool
 	mutex                       sync.Mutex
 	secret                      string
 }
+
+const (
+	AUDIO_CONVERSION_DISABLED          = 0
+	AUDIO_CONVERSION_ENABLED           = 1
+	AUDIO_CONVERSION_ENABLED_NORM      = 2
+	AUDIO_CONVERSION_ENABLED_LOUD_NORM = 3
+)
 
 func NewOptions() *Options {
 	return &Options{
@@ -50,15 +62,32 @@ func NewOptions() *Options {
 	}
 }
 
-func (options *Options) FromMap(m map[string]interface{}) {
+func (options *Options) FromMap(m map[string]any) *Options {
 	options.mutex.Lock()
 	defer options.mutex.Unlock()
+
+	switch v := m["afsSystems"].(type) {
+	case string:
+		options.AfsSystems = v
+	}
+
+	switch v := m["audioConversion"].(type) {
+	case float64:
+		options.AudioConversion = uint(v)
+	default:
+		options.MaxClients = defaults.options.audioConversion
+	}
 
 	switch v := m["autoPopulate"].(type) {
 	case bool:
 		options.AutoPopulate = v
 	default:
 		options.AutoPopulate = defaults.options.autoPopulate
+	}
+
+	switch v := m["branding"].(type) {
+	case string:
+		options.Branding = v
 	}
 
 	switch v := m["dimmerDelay"].(type) {
@@ -70,9 +99,11 @@ func (options *Options) FromMap(m map[string]interface{}) {
 
 	switch v := m["disableAudioConversion"].(type) {
 	case bool:
-		options.DisableAudioConversion = v
-	default:
-		options.DisableAudioConversion = defaults.options.disableAudioConversion
+		if v {
+			options.AudioConversion = 2
+		} else {
+			options.AudioConversion = 0
+		}
 	}
 
 	switch v := m["disableDuplicateDetection"].(type) {
@@ -96,6 +127,11 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	}
 
+	switch v := m["email"].(type) {
+	case string:
+		options.Email = v
+	}
+
 	switch v := m["keypadBeeps"].(type) {
 	case string:
 		options.KeypadBeeps = v
@@ -108,6 +144,11 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.MaxClients = uint(v)
 	default:
 		options.MaxClients = defaults.options.maxClients
+	}
+
+	switch v := m["playbackGoesLive"].(type) {
+	case bool:
+		options.PlaybackGoesLive = v
 	}
 
 	switch v := m["pruneDays"].(type) {
@@ -144,13 +185,22 @@ func (options *Options) FromMap(m map[string]interface{}) {
 	default:
 		options.TagsToggle = defaults.options.tagsToggle
 	}
+
+	switch v := m["time12hFormat"].(type) {
+	case bool:
+		options.Time12hFormat = v
+	default:
+		options.Time12hFormat = defaults.options.time12hFormat
+	}
+
+	return options
 }
 
 func (options *Options) Read(db *Database) error {
 	var (
 		defaultPassword []byte
 		err             error
-		f               interface{}
+		s               string
 	)
 
 	options.mutex.Lock()
@@ -160,130 +210,137 @@ func (options *Options) Read(db *Database) error {
 
 	options.adminPassword = string(defaultPassword)
 	options.adminPasswordNeedChange = defaults.adminPasswordNeedChange
+	options.AudioConversion = defaults.options.audioConversion
 	options.AutoPopulate = defaults.options.autoPopulate
 	options.DimmerDelay = defaults.options.dimmerDelay
-	options.DisableAudioConversion = defaults.options.disableAudioConversion
+	options.DisableDurationCalculation = defaults.options.disableDurationCalculation
 	options.DisableDuplicateDetection = defaults.options.disableDuplicateDetection
 	options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	options.KeypadBeeps = defaults.options.keypadBeeps
 	options.MaxClients = defaults.options.maxClients
+	options.PlaybackGoesLive = defaults.options.playbackGoesLive
 	options.PruneDays = defaults.options.pruneDays
 	options.SearchPatchedTalkgroups = defaults.options.searchPatchedTalkgroups
 	options.ShowListenersCount = defaults.options.showListenersCount
 	options.SortTalkgroups = defaults.options.sortTalkgroups
 	options.TagsToggle = defaults.options.tagsToggle
 
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPassword'").Scan(&f)
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPassword'").Scan(&s)
 	if err == nil {
-		switch v := f.(type) {
-		case []uint8:
-			var f string
-			if err = json.Unmarshal(v, &f); err == nil {
-				options.adminPassword = f
+		if err = json.Unmarshal([]byte(s), &s); err == nil {
+			options.adminPassword = s
+		}
+	}
+
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPasswordNeedChange'").Scan(&s)
+	if err == nil {
+		var b bool
+		if err = json.Unmarshal([]byte(s), &b); err == nil {
+			options.adminPasswordNeedChange = b
+		}
+	}
+
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'options'").Scan(&s)
+	if err == nil {
+		var m map[string]any
+
+		if err = json.Unmarshal([]byte(s), &m); err == nil {
+			switch v := m["afsSystems"].(type) {
+			case string:
+				options.AfsSystems = v
 			}
-		case string:
-			var f string
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				options.adminPassword = f
+
+			switch v := m["audioConversion"].(type) {
+			case float64:
+				options.AudioConversion = uint(v)
+			}
+
+			switch v := m["autoPopulate"].(type) {
+			case bool:
+				options.AutoPopulate = v
+			}
+
+			switch v := m["branding"].(type) {
+			case string:
+				options.Branding = v
+			}
+
+			switch v := m["dimmerDelay"].(type) {
+			case float64:
+				options.DimmerDelay = uint(v)
+			}
+
+			switch v := m["disableDurationCalculation"].(type) {
+			case bool:
+				options.DisableDurationCalculation = v
+			}
+
+			switch v := m["disableDuplicateDetection"].(type) {
+			case bool:
+				options.DisableDuplicateDetection = v
+			}
+
+			switch v := m["duplicateDetectionTimeFrame"].(type) {
+			case float64:
+				options.DuplicateDetectionTimeFrame = uint(v)
+			}
+
+			switch v := m["email"].(type) {
+			case string:
+				options.Email = v
+			}
+
+			switch v := m["keypadBeeps"].(type) {
+			case string:
+				options.KeypadBeeps = v
+			}
+
+			switch v := m["maxClients"].(type) {
+			case float64:
+				options.MaxClients = uint(v)
+			}
+
+			switch v := m["playbackGoesLive"].(type) {
+			case bool:
+				options.PlaybackGoesLive = v
+			}
+
+			switch v := m["pruneDays"].(type) {
+			case float64:
+				options.PruneDays = uint(v)
+			}
+
+			switch v := m["searchPatchedTalkgroups"].(type) {
+			case bool:
+				options.SearchPatchedTalkgroups = v
+			}
+
+			switch v := m["showListenersCount"].(type) {
+			case bool:
+				options.ShowListenersCount = v
+			}
+
+			switch v := m["sortTalkgroups"].(type) {
+			case bool:
+				options.SortTalkgroups = v
+			}
+
+			switch v := m["tagsToggle"].(type) {
+			case bool:
+				options.TagsToggle = v
+			}
+
+			switch v := m["time12hFormat"].(type) {
+			case bool:
+				options.Time12hFormat = v
 			}
 		}
 	}
 
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPasswordNeedChange'").Scan(&f)
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'secret'").Scan(&s)
 	if err == nil {
-		switch v := f.(type) {
-		case []uint8:
-			var f bool
-			if err = json.Unmarshal(v, &f); err == nil {
-				options.adminPasswordNeedChange = f
-			}
-		case string:
-			var f bool
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				options.adminPasswordNeedChange = f
-			}
-		}
-	}
-
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'options'").Scan(&f)
-	if err == nil {
-		switch v := f.(type) {
-		case string:
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				switch v := f.(type) {
-				case map[string]interface{}:
-					switch v := v["autoPopulate"].(type) {
-					case bool:
-						options.AutoPopulate = v
-					}
-
-					switch v := v["dimmerDelay"].(type) {
-					case float64:
-						options.DimmerDelay = uint(v)
-					}
-
-					switch v := v["disableAudioConversion"].(type) {
-					case bool:
-						options.DisableAudioConversion = v
-					}
-
-					switch v := v["disableDuplicateDetection"].(type) {
-					case bool:
-						options.DisableDuplicateDetection = v
-					}
-
-					switch v := v["duplicateDetectionTimeFrame"].(type) {
-					case float64:
-						options.DuplicateDetectionTimeFrame = uint(v)
-					}
-
-					switch v := v["keypadBeeps"].(type) {
-					case string:
-						options.KeypadBeeps = v
-					}
-
-					switch v := v["maxClients"].(type) {
-					case float64:
-						options.MaxClients = uint(v)
-					}
-
-					switch v := v["pruneDays"].(type) {
-					case float64:
-						options.PruneDays = uint(v)
-					}
-
-					switch v := v["searchPatchedTalkgroups"].(type) {
-					case bool:
-						options.SearchPatchedTalkgroups = v
-					}
-
-					switch v := v["showListenersCount"].(type) {
-					case bool:
-						options.ShowListenersCount = v
-					}
-
-					switch v := v["sortTalkgroups"].(type) {
-					case bool:
-						options.SortTalkgroups = v
-					}
-
-					switch v := v["tagsToggle"].(type) {
-					case bool:
-						options.TagsToggle = v
-					}
-				}
-			}
-		}
-	}
-
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'secret'").Scan(&f)
-	if err == nil {
-		switch v := f.(type) {
-		case string:
-			var f string
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				options.secret = f
-			}
+		if err = json.Unmarshal([]byte(s), &s); err == nil {
+			options.secret = s
 		}
 	}
 
@@ -329,19 +386,25 @@ func (options *Options) Write(db *Database) error {
 		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "adminPasswordNeedChange", string(b))
 	}
 
-	if b, err = json.Marshal(map[string]interface{}{
+	if b, err = json.Marshal(map[string]any{
+		"afsSystems":                  options.AfsSystems,
+		"audioConversion":             options.AudioConversion,
 		"autoPopulate":                options.AutoPopulate,
+		"branding":                    options.Branding,
 		"dimmerDelay":                 options.DimmerDelay,
-		"disableAudioConversion":      options.DisableAudioConversion,
+		"disableDurationCalculation":  options.DisableDurationCalculation,
 		"disableDuplicateDetection":   options.DisableDuplicateDetection,
 		"duplicateDetectionTimeFrame": options.DuplicateDetectionTimeFrame,
+		"email":                       options.Email,
 		"keypadBeeps":                 options.KeypadBeeps,
 		"maxClients":                  options.MaxClients,
+		"playbackGoesLive":            options.PlaybackGoesLive,
 		"pruneDays":                   options.PruneDays,
 		"searchPatchedTalkgroups":     options.SearchPatchedTalkgroups,
 		"showListenersCount":          options.ShowListenersCount,
 		"sortTalkgroups":              options.SortTalkgroups,
 		"tagsToggle":                  options.TagsToggle,
+		"time12hFormat":               options.Time12hFormat,
 	}); err != nil {
 		return formatError(err)
 	}

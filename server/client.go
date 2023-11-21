@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -36,9 +37,10 @@ type Client struct {
 	TagsMap    TagsMap
 	Livefeed   *Livefeed
 	SystemsMap SystemsMap
+	request    *http.Request
 }
 
-func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
+func (client *Client) Init(controller *Controller, request *http.Request, conn *websocket.Conn) error {
 	const (
 		pongWait   = 60 * time.Second
 		pingPeriod = pongWait / 10 * 9
@@ -57,14 +59,22 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	client.Access = &Access{}
 	client.Controller = controller
 	client.Conn = conn
-	client.Send = make(chan *Message, 8)
 	client.Livefeed = NewLivefeed()
-
-	controller.Register <- client
+	client.Send = make(chan *Message, 8192)
+	client.request = request
 
 	go func() {
 		defer func() {
 			controller.Unregister <- client
+
+			if len(client.Access.Ident) > 0 {
+				controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listener disconnected from ip %s with ident %s", client.GetRemoteAddr(), client.Access.Ident))
+
+			} else {
+				controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listener disconnected from ip %s", client.GetRemoteAddr()))
+			}
+
+			client.Conn.Close()
 		}()
 
 		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -77,7 +87,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 		for {
 			_, b, err := client.Conn.ReadMessage()
 			if err != nil {
-				break
+				return
 			}
 
 			message := &Message{}
@@ -102,9 +112,11 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 
 		defer func() {
 			ticker.Stop()
-			timer.Stop()
 
-			client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+			if timer != nil {
+				timer.Stop()
+			}
+
 			client.Conn.Close()
 		}()
 
@@ -115,12 +127,20 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 					return
 				}
 
-				if client.Conn == nil {
-					return
-				}
-
 				if message.Command == MessageCommandConfig {
-					timer.Stop()
+					if timer != nil {
+						timer.Stop()
+						timer = nil
+
+						controller.Register <- client
+
+						if len(client.Access.Ident) > 0 {
+							controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s with ident %s", client.GetRemoteAddr(), client.Access.Ident))
+
+						} else {
+							controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s", client.GetRemoteAddr()))
+						}
+					}
 				}
 
 				b, err := message.ToJson()
@@ -148,23 +168,34 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	return nil
 }
 
+func (client *Client) GetRemoteAddr() string {
+	return GetRemoteAddr(client.request)
+}
+
 func (client *Client) SendConfig(groups *Groups, options *Options, systems *Systems, tags *Tags) {
 	client.SystemsMap = systems.GetScopedSystems(client, groups, tags, options.SortTalkgroups)
 	client.GroupsMap = groups.GetGroupsMap(&client.SystemsMap)
 	client.TagsMap = tags.GetTagsMap(&client.SystemsMap)
 
-	client.Send <- &Message{
-		Command: MessageCommandConfig,
-		Payload: map[string]interface{}{
-			"dimmerDelay":        options.DimmerDelay,
-			"groups":             client.GroupsMap,
-			"keypadBeeps":        GetKeypadBeeps(options),
-			"showListenersCount": options.ShowListenersCount,
-			"systems":            client.SystemsMap,
-			"tags":               client.TagsMap,
-			"tagsToggle":         options.TagsToggle,
-		},
+	var payload = map[string]any{
+		"branding":           options.Branding,
+		"dimmerDelay":        options.DimmerDelay,
+		"email":              options.Email,
+		"groups":             client.GroupsMap,
+		"keypadBeeps":        GetKeypadBeeps(options),
+		"playbackGoesLive":   options.PlaybackGoesLive,
+		"showListenersCount": options.ShowListenersCount,
+		"systems":            client.SystemsMap,
+		"tags":               client.TagsMap,
+		"tagsToggle":         options.TagsToggle,
+		"time12hFormat":      options.Time12hFormat,
 	}
+
+	if len(options.AfsSystems) > 0 {
+		payload["afs"] = options.AfsSystems
+	}
+
+	client.Send <- &Message{Command: MessageCommandConfig, Payload: payload}
 }
 
 func (client *Client) SendListenersCount(count int) {
@@ -181,15 +212,12 @@ type Clients struct {
 
 func NewClients() *Clients {
 	return &Clients{
-		Map:   make(map[*Client]bool),
+		Map:   map[*Client]bool{},
 		mutex: sync.Mutex{},
 	}
 }
 
 func (clients *Clients) AccessCount(client *Client) int {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	count := 0
 
 	for c := range clients.Map {
@@ -209,16 +237,10 @@ func (clients *Clients) Add(client *Client) {
 }
 
 func (clients *Clients) Count() int {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	return len(clients.Map)
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	for c := range clients.Map {
 		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
 			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
@@ -227,8 +249,7 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 }
 
 func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
+	count := len(clients.Map)
 
 	for c := range clients.Map {
 		if restricted {
@@ -238,17 +259,16 @@ func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Sy
 		}
 
 		if options.ShowListenersCount {
-			c.SendListenersCount(len(clients.Map))
+			c.SendListenersCount(count)
 		}
 	}
 }
 
 func (clients *Clients) EmitListenersCount() {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
+	count := len(clients.Map)
 
 	for c := range clients.Map {
-		c.SendListenersCount(len(clients.Map))
+		c.SendListenersCount(count)
 	}
 }
 
@@ -257,6 +277,4 @@ func (clients *Clients) Remove(client *Client) {
 	defer clients.mutex.Unlock()
 
 	delete(clients.Map, client)
-
-	close(client.Send)
 }

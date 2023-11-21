@@ -18,15 +18,119 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime"
 	"mime/multipart"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dhowden/tag"
 )
+
+func ParseDSDPlusMeta(call *Call, fp string) error {
+	dir := filepath.Dir(fp)
+	base := strings.TrimSuffix(filepath.Base(fp), filepath.Ext(fp))
+	meta := []string{""}
+
+	lbl := false
+	ptr := 0
+	for i := 0; i < len(base); i++ {
+		if base[i] == '[' {
+			lbl = true
+		} else if base[i] == ']' {
+			lbl = false
+		}
+		if !lbl && base[i] == '_' {
+			ptr++
+			meta = append(meta, "")
+		} else {
+			meta[ptr] += string(base[i])
+		}
+	}
+
+	if d := regexp.MustCompile(`([0-9]+)$`).FindStringSubmatch(dir); len(d) == 2 && len(d[1]) == 8 {
+		if t := regexp.MustCompile(`^([0-9]+)`).FindStringSubmatch(base); len(t) == 2 && len(t[1]) == 6 {
+			if dy, err := strconv.Atoi(d[1][0:4]); err == nil {
+				if dm, err := strconv.Atoi(d[1][4:6]); err == nil {
+					if dd, err := strconv.Atoi(d[1][6:8]); err == nil {
+						if th, err := strconv.Atoi(t[1][0:2]); err == nil {
+							if tm, err := strconv.Atoi(t[1][2:4]); err == nil {
+								if ts, err := strconv.Atoi(t[1][4:6]); err == nil {
+									call.DateTime = time.Date(dy, time.Month(dm), dd, th, tm, ts, 0, time.Now().Location()).UTC()
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(meta) > 3 {
+		switch meta[2] {
+		case "ConP(BS)", "DMR(BS)", "P25(BS)":
+			if s := regexp.MustCompile(`^([0-9]+)-.+$`).FindStringSubmatch(meta[3]); len(s) > 1 {
+				if i, err := strconv.Atoi(s[1]); err == nil {
+					call.System = uint(i)
+				}
+			}
+
+		case "NEXEDGE48(CB)", "NEXEDGE48(CS)", "NEXEDGE48(TB)", "NEXEDGE96(CB)", "NEXEDGE96(CS)", "NEXEDGE96(TB)":
+			if s := regexp.MustCompile(`^.([0-9]+)-[0-9]+$`).FindStringSubmatch(meta[3]); len(s) > 1 {
+				if i, err := strconv.Atoi(s[1]); err == nil && i > 0 {
+					call.System = uint(i)
+				}
+
+			} else if len(meta) > 4 {
+				if s := regexp.MustCompile(`RAN([0-9]+)`).FindStringSubmatch(meta[4]); len(s) > 1 {
+					if i, err := strconv.Atoi(s[1]); err == nil && i > 0 {
+						call.System = uint(i)
+					}
+				}
+			}
+
+		case "P25":
+			if s := regexp.MustCompile(`^[^\.]+\.([^-]+)`).FindStringSubmatch(meta[3]); len(s) > 1 {
+				if i, err := strconv.ParseInt(s[1], 16, 64); err == nil && i > 0 {
+					call.System = uint(i)
+				}
+			}
+		}
+	}
+
+	if s := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-2], -1); len(s) > 0 {
+		if i, err := strconv.Atoi(s[0]); err == nil && i > 0 {
+			call.Talkgroup = uint(i)
+		}
+
+		if len(s) > 1 && len(s[1]) > 0 {
+			if !regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(s[1]) {
+				call.talkgroupLabel = s[1]
+			}
+		}
+	}
+
+	if s := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-1], -1); len(s) > 0 {
+		if src, err := strconv.Atoi(s[0]); err == nil && src > 0 {
+			call.Source = uint(src)
+			if len(s) > 1 && len(s[1]) > 0 {
+				if strings.TrimSpace(s[1]) != fmt.Sprintf("%v", call.Source) {
+					if !regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(s[1]) {
+						units := NewUnits()
+						units.Add(uint(src), strings.TrimSpace(s[1]))
+						call.units = units
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
 
 func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 	var (
@@ -101,10 +205,10 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`(\[.+\])`).FindStringSubmatch(m.Title())
 	if len(s) > 1 && len(s[1]) > 0 {
-		var f interface{}
+		var f any
 		if err = json.Unmarshal([]byte(s[1]), &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
+			case []any:
 				patches := []uint{}
 				for _, patch := range v {
 					switch v := patch.(type) {
@@ -151,15 +255,15 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		}
 
 	case "frequencies":
-		var f interface{}
+		var f any
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
-				var frequencies = []map[string]interface{}{}
+			case []any:
+				var frequencies = []map[string]any{}
 				for _, f := range v {
-					freq := map[string]interface{}{}
+					freq := map[string]any{}
 					switch v := f.(type) {
-					case map[string]interface{}:
+					case map[string]any:
 						switch v := v["errorCount"].(type) {
 						case float64:
 							if v >= 0 {
@@ -204,12 +308,12 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 
 	case "patches", "patched_talkgroups":
 		var (
-			f       interface{}
+			f       any
 			patches = []uint{}
 		)
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
+			case []any:
 				for _, patch := range v {
 					switch v := patch.(type) {
 					case float64:
@@ -229,17 +333,17 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 
 	case "sources":
 		var (
-			f     interface{}
+			f     any
 			units *Units
 		)
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
-				var sources = []map[string]interface{}{}
+			case []any:
+				var sources = []map[string]any{}
 				for _, f := range v {
-					src := map[string]interface{}{}
+					src := map[string]any{}
 					switch v := f.(type) {
-					case map[string]interface{}:
+					case map[string]any:
 						switch v := v["pos"].(type) {
 						case float64:
 							if v >= 0 {
@@ -306,7 +410,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 }
 
 func ParseTrunkRecorderMeta(call *Call, b []byte) error {
-	m := map[string]interface{}{}
+	m := map[string]any{}
 
 	if err := json.Unmarshal(b, &m); err != nil {
 		return err
@@ -320,12 +424,12 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	}
 
 	switch v := m["freqList"].(type) {
-	case []interface{}:
-		freqs := []map[string]interface{}{}
+	case []any:
+		freqs := []map[string]any{}
 		for _, f := range v {
-			freq := map[string]interface{}{}
+			freq := map[string]any{}
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch v := v["error_count"].(type) {
 				case float64:
 					if v >= 0 {
@@ -368,7 +472,7 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	}
 
 	switch v := m["patched_talkgroups"].(type) {
-	case []interface{}:
+	case []any:
 		patches := []uint{}
 		for _, f := range v {
 			switch v := f.(type) {
@@ -384,12 +488,12 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	}
 
 	switch v := m["srcList"].(type) {
-	case []interface{}:
-		sources := []map[string]interface{}{}
+	case []any:
+		sources := []map[string]any{}
 		for _, f := range v {
-			source := map[string]interface{}{}
+			source := map[string]any{}
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch v := v["pos"].(type) {
 				case float64:
 					if v >= 0 {

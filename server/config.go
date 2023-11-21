@@ -51,6 +51,7 @@ type Config struct {
 	SslCertFile      string
 	SslKeyFile       string
 	SslListen        string
+	daemon           *Daemon
 	newAdminPassword string
 }
 
@@ -66,6 +67,7 @@ func NewConfig() *Config {
 	)
 
 	var (
+		command       = flag.String(COMMAND_ARG, "", fmt.Sprintf("advanced administrative tasks (use -%s %s for usage)", COMMAND_ARG, COMMAND_HELP))
 		config        = &Config{}
 		configSave    = flag.Bool("config_save", false, fmt.Sprintf("save configuration to %s", defaultConfigFile))
 		serviceAction = flag.String("service", "", "service command, one of start, stop, restart, install, uninstall")
@@ -96,11 +98,11 @@ func NewConfig() *Config {
 	flag.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
 	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
+	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
 	flag.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
 	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
 	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
-	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
 	flag.Parse()
 
 	if !config.isBaseDirWritable() {
@@ -178,8 +180,12 @@ func NewConfig() *Config {
 		}
 	}
 
+	if *command != "" {
+		NewCommand(config.BaseDir).Do(*command)
+	}
+
 	if *serviceAction != "" {
-		NewDaemon().Control(*serviceAction)
+		config.daemon = NewDaemon().Control(*serviceAction)
 	}
 
 	return config

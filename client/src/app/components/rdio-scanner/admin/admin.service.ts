@@ -129,18 +129,23 @@ export interface LogsQueryOptions {
 }
 
 export interface Options {
+    afsSystems?: string;
+    audioConversion?: 0 | 1 | 2 | 3;
     autoPopulate?: boolean;
+    branding?: string;
     dimmerDelay?: number;
-    disableAudioConversion?: boolean;
     disableDuplicateDetection?: boolean;
     duplicateDetectionTimeFrame?: number;
+    email?: string;
     keypadBeeps?: string;
     maxClients?: number;
+    playbackGoesLive?: boolean;
     pruneDays?: number;
     searchPatchedTalkgroups?: boolean;
     showListenersCount?: boolean;
     sortTalkgroups?: boolean;
     tagsToggle?: boolean;
+    time12hFormat?: boolean;
 }
 
 export interface System {
@@ -285,7 +290,7 @@ export class RdioScannerAdminService implements OnDestroy {
     }
 
     getLeds(): string[] {
-        return ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];
+        return ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
     }
 
     async getLogs(options: LogsQueryOptions): Promise<LogsQuery | undefined> {
@@ -491,18 +496,23 @@ export class RdioScannerAdminService implements OnDestroy {
 
     newOptionsForm(options?: Options): FormGroup {
         return this.ngFormBuilder.group({
+            afsSystems: [options?.afsSystems, this.validateAfsSystems()],
+            audioConversion: [options?.audioConversion],
             autoPopulate: [options?.autoPopulate],
+            branding: [options?.branding],
             dimmerDelay: [options?.dimmerDelay, [Validators.required, Validators.min(0)]],
-            disableAudioConversion: [options?.disableAudioConversion],
             disableDuplicateDetection: [options?.disableDuplicateDetection],
             duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
+            email: [options?.email],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
             maxClients: [options?.maxClients, [Validators.required, Validators.min(1)]],
+            playbackGoesLive: [options?.playbackGoesLive],
             pruneDays: [options?.pruneDays, [Validators.required, Validators.min(0)]],
 			searchPatchedTalkgroups: [options?.searchPatchedTalkgroups],
 			showListenersCount: [options?.showListenersCount],
             sortTalkgroups: [options?.sortTalkgroups],
             tagsToggle: [options?.tagsToggle],
+            time12hFormat: [options?.time12hFormat],
         });
     }
 
@@ -595,6 +605,12 @@ export class RdioScannerAdminService implements OnDestroy {
         };
     }
 
+    private validateAfsSystems(): ValidatorFn {
+        return (control: AbstractControl): ValidationErrors | null => {
+            return typeof control.value === 'string' && control.value.length ? /^[0-9]+(,[0-9]+)*$/.test(control.value) ? null : { invalid: true } : null;
+        };
+    }
+
     private validateApiKey(): ValidatorFn {
         return (control: AbstractControl): ValidationErrors | null => {
             if (typeof control.value !== 'string' || !control.value.length) {
@@ -621,11 +637,39 @@ export class RdioScannerAdminService implements OnDestroy {
                 return null;
             }
 
+            if (control.value.startsWith('\\')) {
+                return { network: true }
+            }
+
             const dirWatch: DirWatch[] = control.parent?.parent?.getRawValue() || [];
 
             const count = dirWatch.reduce((c, a) => c += a.directory === control.value ? 1 : 0, 0);
 
             return count > 1 ? { duplicate: true } : null;
+        };
+    }
+
+    private validateDirwatchSystemId(): ValidatorFn {
+        return (control: AbstractControl): ValidationErrors | null => {
+            const dirwatch = control.parent?.getRawValue() || {};
+
+            const mask = dirwatch.mask || '';
+
+            const type = dirwatch.type;
+
+            return ['dsdplus', 'trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#SYS/.test(mask) ? null : { required: true };
+        };
+    }
+
+    private validateDirwatchTalkgroupId(): ValidatorFn {
+        return (control: AbstractControl): ValidationErrors | null => {
+            const dirwatch = control.parent?.getRawValue() || {};
+
+            const mask = dirwatch.mask || '';
+
+            const type = dirwatch.type;
+
+            return ['dsdplus', 'trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#TG/.test(mask) ? null : { required: true };
         };
     }
 
@@ -640,30 +684,6 @@ export class RdioScannerAdminService implements OnDestroy {
             const count = downstream.reduce((c, a) => c += a.url === control.value ? 1 : 0, 0);
 
             return count > 1 ? { duplicate: true } : null;
-        };
-    }
-
-    private validateDirwatchSystemId(): ValidatorFn {
-        return (control: AbstractControl): ValidationErrors | null => {
-            const dirwatch = control.parent?.getRawValue() || {};
-
-            const mask = dirwatch.mask || '';
-
-            const type = dirwatch.type;
-
-            return ['sdr-trunk'].includes(type) || control.value !== null || /#SYS/.test(mask) ? null : { required: true };
-        };
-    }
-
-    private validateDirwatchTalkgroupId(): ValidatorFn {
-        return (control: AbstractControl): ValidationErrors | null => {
-            const dirwatch = control.parent?.getRawValue() || {};
-
-            const mask = dirwatch.mask || '';
-
-            const type = dirwatch.type;
-
-            return ['trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#TG/.test(mask) ? null : { required: true };
         };
     }
 
@@ -709,7 +729,7 @@ export class RdioScannerAdminService implements OnDestroy {
                 return null;
             }
 
-            const masks = ['#DATE', '#HZ', '#KHZ', '#MHZ', '#SYS', '#TIME', '#TG', '#TGHZ', '#TGKHZ', '#TGMHZ', '#UNIT', '#ZTIME'];
+            const masks = ['#DATE', '#GROUP', '#HZ', '#KHZ', '#MHZ', '#SYS', '#SYSLBL', '#TAG', '#TG', '#TGAFS', '#TGHZ', '#TGKHZ', '#TGLBL', '#TGMHZ', '#TIME', '#UNIT', '#ZTIME'];
 
             const metas = control.value.match(/(#[A-Z]+)/g) || [];
 

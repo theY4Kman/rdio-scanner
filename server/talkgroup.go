@@ -25,19 +25,19 @@ import (
 )
 
 type Talkgroup struct {
-	Frequency interface{} `json:"frequency"`
+	Frequency any `json:"frequency"`
 	group     string
-	GroupId   uint        `json:"groupId"`
-	Id        uint        `json:"id"`
-	Label     string      `json:"label"`
-	Led       interface{} `json:"led"`
-	Name      string      `json:"name"`
-	Order     uint        `json:"order"`
-	TagId     uint        `json:"tagId"`
+	GroupId   uint   `json:"groupId"`
+	Id        uint   `json:"id"`
+	Label     string `json:"label"`
+	Led       any    `json:"led"`
+	Name      string `json:"name"`
+	Order     uint   `json:"order"`
+	TagId     uint   `json:"tagId"`
 	tag       string
 }
 
-func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
+func (talkgroup *Talkgroup) FromMap(m map[string]any) *Talkgroup {
 	switch v := m["id"].(type) {
 	case float64:
 		talkgroup.Id = uint(v)
@@ -87,9 +87,11 @@ func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
 	case float64:
 		talkgroup.TagId = uint(v)
 	}
+
+	return talkgroup
 }
 
-type TalkgroupMap map[string]interface{}
+type TalkgroupMap map[string]any
 
 type Talkgroups struct {
 	List  []*Talkgroup
@@ -103,7 +105,7 @@ func NewTalkgroups() *Talkgroups {
 	}
 }
 
-func (talkgroups *Talkgroups) FromMap(f []interface{}) {
+func (talkgroups *Talkgroups) FromMap(f []any) *Talkgroups {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
@@ -111,15 +113,17 @@ func (talkgroups *Talkgroups) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			talkgroup := &Talkgroup{}
 			talkgroup.FromMap(m)
 			talkgroups.List = append(talkgroups.List, talkgroup)
 		}
 	}
+
+	return talkgroups
 }
 
-func (talkgroups *Talkgroups) GetTalkgroup(f interface{}) (system *Talkgroup, ok bool) {
+func (talkgroups *Talkgroups) GetTalkgroup(f any) (system *Talkgroup, ok bool) {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
@@ -208,25 +212,6 @@ func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
 		return fmt.Errorf("talkgroups.write: %v", err)
 	}
 
-	for _, talkgroup := range talkgroups.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTalkgroups` where `id` = ? and `systemId` = ?", talkgroup.Id, systemId).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerTalkgroups` (`frequency`, `groupId`, `id`, `label`, `led`, `name`, `order`, `systemId`, `tagId`) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Id, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, systemId, talkgroup.TagId); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerTalkgroups` set `frequency` = ?, `groupId` = ?, `label` = ?, `led` = ?, `name` = ?, `order` = ?, `tagId` = ? where `id` = ? and `systemId` = ?", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, talkgroup.TagId, talkgroup.Id, systemId); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `id` from `rdioScannerTalkgroups` where `systemId` = ?", systemId); err != nil {
 		return formatError(err)
 	}
@@ -264,6 +249,25 @@ func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, talkgroup := range talkgroups.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTalkgroups` where `id` = ? and `systemId` = ?", talkgroup.Id, systemId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerTalkgroups` (`frequency`, `groupId`, `id`, `label`, `led`, `name`, `order`, `systemId`, `tagId`) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Id, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, systemId, talkgroup.TagId); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerTalkgroups` set `frequency` = ?, `groupId` = ?, `label` = ?, `led` = ?, `name` = ?, `order` = ?, `tagId` = ? where `id` = ? and `systemId` = ?", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, talkgroup.TagId, talkgroup.Id, systemId); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

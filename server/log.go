@@ -32,14 +32,16 @@ const (
 )
 
 type Log struct {
-	Id       interface{} `json:"_id"`
-	DateTime time.Time   `json:"dateTime"`
-	Level    string      `json:"level"`
-	Message  string      `json:"message"`
+	Id       any       `json:"_id"`
+	DateTime time.Time `json:"dateTime"`
+	Level    string    `json:"level"`
+	Message  string    `json:"message"`
 }
 
 type Logs struct {
-	mutex sync.Mutex
+	database *Database
+	mutex    sync.Mutex
+	daemon   *Daemon
 }
 
 func NewLogs() *Logs {
@@ -48,20 +50,34 @@ func NewLogs() *Logs {
 	}
 }
 
-func (logs *Logs) LogEvent(db *Database, level string, message string) error {
+func (logs *Logs) LogEvent(level string, message string) error {
 	logs.mutex.Lock()
 	defer logs.mutex.Unlock()
 
-	log.Println(message)
+	if logs.daemon != nil {
+		switch level {
+		case LogLevelError:
+			logs.daemon.Logger.Error(message)
+		case LogLevelWarn:
+			logs.daemon.Logger.Warning(message)
+		case LogLevelInfo:
+			logs.daemon.Logger.Info(message)
+		}
 
-	l := Log{
-		DateTime: time.Now().UTC(),
-		Level:    level,
-		Message:  message,
+	} else {
+		log.Println(message)
 	}
 
-	if _, err := db.Sql.Exec("insert into `rdioScannerLogs` (`dateTime`, `level`, `message`) values (?, ?, ?)", l.DateTime, l.Level, l.Message); err != nil {
-		return fmt.Errorf("logs.logevent: %v", err)
+	if logs.database != nil {
+		l := Log{
+			DateTime: time.Now().UTC(),
+			Level:    level,
+			Message:  message,
+		}
+
+		if _, err := logs.database.Sql.Exec("insert into `rdioScannerLogs` (`dateTime`, `level`, `message`) values (?, ?, ?)", l.DateTime, l.Level, l.Message); err != nil {
+			return fmt.Errorf("logs.logevent: %v", err)
+		}
 	}
 
 	return nil
@@ -84,7 +100,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	)
 
 	var (
-		dateTime interface{}
+		dateTime any
 		err      error
 		id       sql.NullFloat64
 		limit    uint
@@ -99,7 +115,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	defer logs.mutex.Unlock()
 
 	formatError := func(err error) error {
-		return fmt.Errorf("newLogResults: %v", err)
+		return fmt.Errorf("logs.search: %v", err)
 	}
 
 	logResults := &LogsSearchResults{
@@ -109,7 +125,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 	switch v := searchOptions.Level.(type) {
 	case string:
-		where += fmt.Sprintf(" and `level` == '%v'", v)
+		where += fmt.Sprintf(" and `level` = '%v'", v)
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -160,14 +176,8 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime == nil {
-		return logResults, nil
-	}
-
 	if t, err := db.ParseDateTime(dateTime); err == nil {
 		logResults.DateStart = t
-	} else {
-		return nil, err
 	}
 
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
@@ -177,8 +187,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 	if t, err := db.ParseDateTime(dateTime); err == nil {
 		logResults.DateStop = t
-	} else {
-		return nil, err
 	}
 
 	query = fmt.Sprintf("select count(*) from `rdioScannerLogs` where %v", where)
@@ -220,15 +228,27 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	return logResults, nil
 }
 
-type LogsSearchOptions struct {
-	Date   interface{} `json:"date,omitempty"`
-	Level  interface{} `json:"level,omitempty"`
-	Limit  interface{} `json:"limit,omitempty"`
-	Offset interface{} `json:"offset,omitempty"`
-	Sort   interface{} `json:"sort,omitempty"`
+func (logs *Logs) setDaemon(d *Daemon) {
+	logs.daemon = d
 }
 
-func (searchOptions *LogsSearchOptions) FromMap(m map[string]interface{}) error {
+func (logs *Logs) setDatabase(d *Database) {
+	logs.database = d
+}
+
+type LogsSearchOptions struct {
+	Date   any `json:"date,omitempty"`
+	Level  any `json:"level,omitempty"`
+	Limit  any `json:"limit,omitempty"`
+	Offset any `json:"offset,omitempty"`
+	Sort   any `json:"sort,omitempty"`
+}
+
+func NewLogSearchOptions() *LogsSearchOptions {
+	return &LogsSearchOptions{}
+}
+
+func (searchOptions *LogsSearchOptions) FromMap(m map[string]any) *LogsSearchOptions {
 	switch v := m["date"].(type) {
 	case string:
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
@@ -256,7 +276,7 @@ func (searchOptions *LogsSearchOptions) FromMap(m map[string]interface{}) error 
 		searchOptions.Sort = int(v)
 	}
 
-	return nil
+	return searchOptions
 }
 
 type LogsSearchResults struct {

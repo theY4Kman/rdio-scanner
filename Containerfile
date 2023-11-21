@@ -1,9 +1,6 @@
-FROM docker.io/alpine:latest AS builder
+FROM docker.io/golang:1.18-alpine AS builder
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 ENV DOCKER=1
-
-# Install build dependencies
-RUN apk --no-cache --no-progress --virtual .build add go
 
 # Download dependencies in early layer, as these rarely change
 COPY server/go.mod server/go.sum /app/server/

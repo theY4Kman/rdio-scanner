@@ -61,7 +61,7 @@ func NewDatabase(config *Config) *Database {
 		log.Fatalf("unknown database type %s\n", config.DbType)
 	}
 
-	database.Sql.SetConnMaxLifetime(0)
+	database.Sql.SetConnMaxLifetime(time.Minute)
 	database.Sql.SetMaxIdleConns(25)
 	database.Sql.SetMaxOpenConns(25)
 
@@ -76,7 +76,7 @@ func NewDatabase(config *Config) *Database {
 	return database
 }
 
-func (db *Database) ParseDateTime(f interface{}) (time.Time, error) {
+func (db *Database) ParseDateTime(f any) (time.Time, error) {
 	switch v := f.(type) {
 	case []uint8:
 		return time.Parse(db.DateTimeFormat, string(v))
@@ -380,10 +380,10 @@ func (db *Database) migration20211202094819(verbose bool) error {
 func (db *Database) migration20220101070000(verbose bool) error {
 	var (
 		err        error
-		frequency  interface{}
+		frequency  any
 		id         uint
 		label      string
-		led        interface{}
+		led        any
 		name       string
 		queries    []string
 		rows       *sql.Rows

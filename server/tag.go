@@ -24,11 +24,11 @@ import (
 )
 
 type Tag struct {
-	Id    interface{} `json:"_id"`
-	Label string      `json:"label"`
+	Id    any    `json:"_id"`
+	Label string `json:"label"`
 }
 
-func (tag *Tag) FromMap(m map[string]interface{}) {
+func (tag *Tag) FromMap(m map[string]any) *Tag {
 	switch v := m["_id"].(type) {
 	case float64:
 		tag.Id = uint(v)
@@ -38,6 +38,8 @@ func (tag *Tag) FromMap(m map[string]interface{}) {
 	case string:
 		tag.Label = v
 	}
+
+	return tag
 }
 
 type Tags struct {
@@ -52,7 +54,7 @@ func NewTags() *Tags {
 	}
 }
 
-func (tags *Tags) FromMap(f []interface{}) {
+func (tags *Tags) FromMap(f []any) *Tags {
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
 
@@ -60,15 +62,17 @@ func (tags *Tags) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			tag := &Tag{}
 			tag.FromMap(m)
 			tags.List = append(tags.List, tag)
 		}
 	}
+
+	return tags
 }
 
-func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
+func (tags *Tags) GetTag(f any) (tag *Tag, ok bool) {
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
 
@@ -216,24 +220,6 @@ func (tags *Tags) Write(db *Database) error {
 		return fmt.Errorf("tags write %v", err)
 	}
 
-	for _, tag := range tags.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTags` where `_id` = ?", tag.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerTags` (`_id`, `label`) values (?, ?)", tag.Id, tag.Label); err != nil {
-				break
-			}
-		} else if _, err = db.Sql.Exec("update `rdioScannerTags` set `_id` = ?, `label` = ? where `_id` = ?", tag.Id, tag.Label, tag.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerTags`"); err != nil {
 		return formatError(err)
 	}
@@ -271,6 +257,24 @@ func (tags *Tags) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, tag := range tags.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTags` where `_id` = ?", tag.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerTags` (`_id`, `label`) values (?, ?)", tag.Id, tag.Label); err != nil {
+				break
+			}
+		} else if _, err = db.Sql.Exec("update `rdioScannerTags` set `_id` = ?, `label` = ? where `_id` = ?", tag.Id, tag.Label, tag.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

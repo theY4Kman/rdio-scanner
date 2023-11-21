@@ -25,16 +25,20 @@ import (
 )
 
 type Access struct {
-	Id         interface{} `json:"_id"`
-	Code       string      `json:"code"`
-	Expiration interface{} `json:"expiration"`
-	Ident      string      `json:"ident"`
-	Limit      interface{} `json:"limit"`
-	Order      interface{} `json:"order"`
-	Systems    interface{} `json:"systems"`
+	Id         any    `json:"_id"`
+	Code       string `json:"code"`
+	Expiration any    `json:"expiration"`
+	Ident      string `json:"ident"`
+	Limit      any    `json:"limit"`
+	Order      any    `json:"order"`
+	Systems    any    `json:"systems"`
 }
 
-func (access *Access) FromMap(m map[string]interface{}) {
+func NewAccess() *Access {
+	return &Access{Systems: "*"}
+}
+
+func (access *Access) FromMap(m map[string]any) *Access {
 	switch v := m["_id"].(type) {
 	case float64:
 		access.Id = uint(v)
@@ -68,22 +72,24 @@ func (access *Access) FromMap(m map[string]interface{}) {
 	}
 
 	switch v := m["systems"].(type) {
-	case []interface{}:
+	case []any:
 		if b, err := json.Marshal(v); err == nil {
 			access.Systems = string(b)
 		}
 	case string:
 		access.Systems = v
 	}
+
+	return access
 }
 
 func (access *Access) HasAccess(call *Call) bool {
 	if access.Systems != nil {
 		switch v := access.Systems.(type) {
-		case []interface{}:
+		case []any:
 			for _, f := range v {
 				switch v := f.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					switch id := v["id"].(type) {
 					case float64:
 						if id == float64(call.System) {
@@ -92,7 +98,7 @@ func (access *Access) HasAccess(call *Call) bool {
 								if tg == "*" {
 									return true
 								}
-							case []interface{}:
+							case []any:
 								for _, f := range tg {
 									switch tg := f.(type) {
 									case float64:
@@ -137,7 +143,30 @@ func NewAccesses() *Accesses {
 	}
 }
 
-func (accesses *Accesses) FromMap(f []interface{}) {
+func (accesses *Accesses) Add(access *Access) (*Accesses, bool) {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	added := true
+
+	for _, a := range accesses.List {
+		if a.Code == access.Code {
+			a.Expiration = access.Expiration
+			a.Ident = access.Ident
+			a.Limit = access.Limit
+			a.Systems = access.Systems
+			added = false
+		}
+	}
+
+	if added {
+		accesses.List = append(accesses.List, access)
+	}
+
+	return accesses, added
+}
+
+func (accesses *Accesses) FromMap(f []any) *Accesses {
 	accesses.mutex.Lock()
 	defer accesses.mutex.Unlock()
 
@@ -145,12 +174,14 @@ func (accesses *Accesses) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			access := &Access{}
 			access.FromMap(m)
 			accesses.List = append(accesses.List, access)
 		}
 	}
+
+	return accesses
 }
 
 func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
@@ -176,7 +207,7 @@ func (accesses *Accesses) IsRestricted() bool {
 func (accesses *Accesses) Read(db *Database) error {
 	var (
 		err        error
-		expiration interface{}
+		expiration any
 		id         sql.NullFloat64
 		limit      sql.NullFloat64
 		order      sql.NullFloat64
@@ -230,7 +261,7 @@ func (accesses *Accesses) Read(db *Database) error {
 		}
 
 		if err = json.Unmarshal([]byte(systems), &access.Systems); err != nil {
-			access.Systems = []interface{}{}
+			access.Systems = []any{}
 		}
 
 		accesses.List = append(accesses.List, access)
@@ -245,13 +276,29 @@ func (accesses *Accesses) Read(db *Database) error {
 	return nil
 }
 
+func (accesses *Accesses) Remove(access *Access) (*Accesses, bool) {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	removed := false
+
+	for i, a := range accesses.List {
+		if a.Ident == access.Ident {
+			accesses.List = append(accesses.List[:i], accesses.List[i+1:]...)
+			removed = true
+		}
+	}
+
+	return accesses, removed
+}
+
 func (accesses *Accesses) Write(db *Database) error {
 	var (
 		count   uint
 		err     error
 		rows    *sql.Rows
 		rowIds  = []uint{}
-		systems interface{}
+		systems any
 	)
 
 	accesses.mutex.Lock()
@@ -259,32 +306,6 @@ func (accesses *Accesses) Write(db *Database) error {
 
 	formatError := func(err error) error {
 		return fmt.Errorf("accesses.write: %v", err)
-	}
-
-	for _, access := range accesses.List {
-		switch access.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = access.Systems
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerAccesses` where `_id` = ?", access.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerAccesses` (`_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems`) values (?, ?, ?, ?, ?, ?, ?)", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerAccesses` set `_id` = ?, `code` = ?, `expiration` = ?, `ident` = ?, `limit` = ?, `order` = ?, `systems` = ? where `_id` = ?", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems, access.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
 	}
 
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerAccesses`"); err != nil {
@@ -324,6 +345,32 @@ func (accesses *Accesses) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, access := range accesses.List {
+		switch access.Systems {
+		case "*":
+			systems = `"*"`
+		default:
+			systems = access.Systems
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerAccesses` where `_id` = ?", access.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerAccesses` (`_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems`) values (?, ?, ?, ?, ?, ?, ?)", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerAccesses` set `_id` = ?, `code` = ?, `expiration` = ?, `ident` = ?, `limit` = ?, `order` = ?, `systems` = ? where `_id` = ?", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems, access.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

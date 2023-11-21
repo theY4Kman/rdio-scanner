@@ -24,11 +24,11 @@ import (
 )
 
 type Group struct {
-	Id    interface{} `json:"_id"`
-	Label string      `json:"label"`
+	Id    any    `json:"_id"`
+	Label string `json:"label"`
 }
 
-func (group *Group) FromMap(m map[string]interface{}) {
+func (group *Group) FromMap(m map[string]any) *Group {
 	switch v := m["_id"].(type) {
 	case float64:
 		group.Id = uint(v)
@@ -38,6 +38,8 @@ func (group *Group) FromMap(m map[string]interface{}) {
 	case string:
 		group.Label = v
 	}
+
+	return group
 }
 
 type Groups struct {
@@ -52,7 +54,7 @@ func NewGroups() *Groups {
 	}
 }
 
-func (groups *Groups) FromMap(f []interface{}) {
+func (groups *Groups) FromMap(f []any) *Groups {
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()
 
@@ -60,15 +62,17 @@ func (groups *Groups) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			group := &Group{}
 			group.FromMap(m)
 			groups.List = append(groups.List, group)
 		}
 	}
+
+	return groups
 }
 
-func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
+func (groups *Groups) GetGroup(f any) (group *Group, ok bool) {
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()
 
@@ -220,25 +224,6 @@ func (groups *Groups) Write(db *Database) error {
 		return fmt.Errorf("groups.write %v", err)
 	}
 
-	for _, group := range groups.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerGroups` where `_id` = ?", group.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerGroups` (`_id`, `label`) values (?, ?)", group.Id, group.Label); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerGroups` set `_id` = ?, `label` = ? where `_id` = ?", group.Id, group.Label, group.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerGroups`"); err != nil {
 		return formatError(err)
 	}
@@ -276,6 +261,25 @@ func (groups *Groups) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, group := range groups.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerGroups` where `_id` = ?", group.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerGroups` (`_id`, `label`) values (?, ?)", group.Id, group.Label); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerGroups` set `_id` = ?, `label` = ? where `_id` = ?", group.Id, group.Label, group.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { AfterViewInit, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, Input, OnDestroy, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
@@ -40,7 +40,7 @@ import { MatSidenav } from "@angular/material/sidenav";
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
 })
-export class RdioScannerSearchComponent implements OnDestroy, OnInit, AfterViewInit {
+export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     call: RdioScannerCall | undefined;
     callPending: number | undefined;
 
@@ -69,6 +69,8 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit, AfterViewI
     resultsPending = false;
 
     shortcuts: ShortcutInput[] = [];
+
+    time12h = false;
 
     private config: RdioScannerConfig | undefined;
 
@@ -119,10 +121,6 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit, AfterViewI
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
-    }
-
-    ngOnInit(): void {
-
     }
 
     play(id: number): void {
@@ -334,6 +332,8 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit, AfterViewI
             this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
             this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
             this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
+
+            this.time12h = this.config?.time12hFormat || false;
         }
 
         if ('livefeedMode' in event) {

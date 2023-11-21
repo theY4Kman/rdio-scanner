@@ -27,32 +27,32 @@ import (
 )
 
 type Call struct {
-	Id             interface{} `json:"id"`
-	Audio          []byte      `json:"audio"`
-	AudioName      interface{} `json:"audioName"`
-	AudioType      interface{} `json:"audioType"`
-	AudioDuration  interface{} `json:"audioDuration"`
-	DateTime       time.Time   `json:"dateTime"`
-	Frequencies    interface{} `json:"frequencies"`
-	Frequency      interface{} `json:"frequency"`
-	Patches        interface{} `json:"patches"`
-	Source         interface{} `json:"source"`
-	Sources        interface{} `json:"sources"`
-	System         uint        `json:"system"`
-	Talkgroup      uint        `json:"talkgroup"`
-	systemLabel    interface{}
-	talkgroupGroup interface{}
-	talkgroupLabel interface{}
-	talkgroupName  interface{}
-	talkgroupTag   interface{}
-	units          interface{}
+	Id             any       `json:"id"`
+	Audio          []byte    `json:"audio"`
+	AudioName      any       `json:"audioName"`
+	AudioType      any       `json:"audioType"`
+	AudioDuration  any       `json:"audioDuration"`
+	DateTime       time.Time `json:"dateTime"`
+	Frequencies    any       `json:"frequencies"`
+	Frequency      any       `json:"frequency"`
+	Patches        any       `json:"patches"`
+	Source         any       `json:"source"`
+	Sources        any       `json:"sources"`
+	System         uint      `json:"system"`
+	Talkgroup      uint      `json:"talkgroup"`
+	systemLabel    any
+	talkgroupGroup any
+	talkgroupLabel any
+	talkgroupName  any
+	talkgroupTag   any
+	units          any
 }
 
 func NewCall() *Call {
 	return &Call{
-		Frequencies: []map[string]interface{}{},
+		Frequencies: []map[string]any{},
 		Patches:     []uint{},
-		Sources:     []map[string]interface{}{},
+		Sources:     []map[string]any{},
 	}
 }
 
@@ -86,9 +86,9 @@ func (call *Call) MarshalJSON() ([]byte, error) {
 	audio := fmt.Sprintf("%v", call.Audio)
 	audio = strings.ReplaceAll(audio, " ", ",")
 
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"id": call.Id,
-		"audio": map[string]interface{}{
+		"audio": map[string]any{
 			"data": json.RawMessage(audio),
 			"type": "Buffer",
 		},
@@ -131,8 +131,8 @@ func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) b
 	defer calls.mutex.Unlock()
 
 	d := time.Duration(msTimeFrame) * time.Millisecond
-	from := call.DateTime.Add(-d).Format(db.DateTimeFormat)
-	to := call.DateTime.Add(d).Format(db.DateTimeFormat)
+	from := call.DateTime.Add(-d)
+	to := call.DateTime.Add(d)
 
 	query := fmt.Sprintf("select count(*) from `rdioScannerCalls` where (`dateTime` between '%v' and '%v') and `system` = %v and `talkgroup` = %v", from, to, call.System, call.Talkgroup)
 	if err := db.Sql.QueryRow(query).Scan(&count); err != nil {
@@ -144,7 +144,11 @@ func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) b
 
 func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	var (
-		dateTime    interface{}
+		audioName   sql.NullString
+		audioType   sql.NullString
+		dateTime    any
+		frequency   sql.NullFloat64
+		source      sql.NullFloat64
 		frequencies string
 		patches     string
 		sources     string
@@ -154,12 +158,24 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	calls.mutex.Lock()
 	defer calls.mutex.Unlock()
 
-	call := Call{}
+	call := Call{Id: id}
 
-	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `audioDuration`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &call.AudioDuration, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
+	query := fmt.Sprintf("select `audio`, `audioName`, `audioType`, `audioDuration`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
+	err := db.Sql.QueryRow(query).Scan(&call.Audio, &audioName, &audioType, &call.AudioDuration, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
+	}
+
+	if audioName.Valid {
+		call.AudioName = audioName.String
+	}
+
+	if audioType.Valid {
+		call.AudioType = audioType.String
+	}
+
+	if frequency.Valid && frequency.Float64 > 0 {
+		call.Frequency = uint(frequency.Float64)
 	}
 
 	if t, err = db.ParseDateTime(dateTime); err == nil {
@@ -170,19 +186,23 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 
 	if len(frequencies) > 0 {
 		if err = json.Unmarshal([]byte(frequencies), &call.Frequencies); err != nil {
-			call.Frequencies = []interface{}{}
+			call.Frequencies = []any{}
 		}
 	}
 
 	if len(patches) > 0 {
 		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
-			call.Patches = []interface{}{}
+			call.Patches = []any{}
 		}
+	}
+
+	if source.Valid && source.Float64 > 0 {
+		call.Source = uint(source.Float64)
 	}
 
 	if len(sources) > 0 {
 		if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
-			call.Sources = []interface{}{}
+			call.Sources = []any{}
 		}
 	}
 
@@ -206,7 +226,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	)
 
 	var (
-		dateTime interface{}
+		dateTime any
 		err      error
 		id       sql.NullFloat64
 		limit    uint
@@ -224,7 +244,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	db := client.Controller.Database
 
 	formatError := func(err error) error {
-		return fmt.Errorf("newSearchResults: %v", err)
+		return fmt.Errorf("calls.search: %v", err)
 	}
 
 	searchResults := &CallsSearchResults{
@@ -234,14 +254,14 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 	if client.Access != nil {
 		switch v := client.Access.Systems.(type) {
-		case []interface{}:
+		case []any:
 			var a []string
 			for _, scope := range v {
 				var c string
 				switch v := scope.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					switch v["talkgroups"].(type) {
-					case []interface{}:
+					case []any:
 						b := strings.ReplaceAll(fmt.Sprintf("%v", v["talkgroups"]), " ", ", ")
 						b = strings.ReplaceAll(b, "[", "(")
 						b = strings.ReplaceAll(b, "]", ")")
@@ -309,13 +329,10 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime == nil {
-		return searchResults, nil
-	}
-
 	if t, err = db.ParseDateTime(dateTime); err == nil {
 		searchResults.DateStart = t
 	}
+
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` desc limit 1", where)
 	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
@@ -323,6 +340,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 	if t, err = db.ParseDateTime(dateTime); err == nil {
 		searchResults.DateStop = t
+	} else {
+		searchResults.DateStop = time.Now()
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -349,8 +368,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 			stop = start.Add(time.Hour*24 - time.Millisecond)
 
 		} else {
-			start = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC).Add(time.Hour*-24 - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
-			stop = start.Add(time.Hour*24 - time.Millisecond - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
+			start = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC).Add(time.Hour*-24 + time.Millisecond)
+			stop = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC)
 		}
 
 		where += fmt.Sprintf(" and (`dateTime` between '%v' and '%v')", start.Format(df), stop.Format(df))
@@ -434,7 +453,7 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 	}
 
 	switch v := call.Frequencies.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if b, err = json.Marshal(v); err == nil {
 			frequencies = string(b)
 		} else {
@@ -452,7 +471,7 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 	}
 
 	switch v := call.Sources.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if b, err = json.Marshal(v); err == nil {
 			sources = string(b)
 		} else {
@@ -480,18 +499,18 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 }
 
 type CallsSearchOptions struct {
-	Date                    interface{} `json:"date,omitempty"`
-	Group                   interface{} `json:"group,omitempty"`
-	Limit                   interface{} `json:"limit,omitempty"`
-	Offset                  interface{} `json:"offset,omitempty"`
-	Sort                    interface{} `json:"sort,omitempty"`
-	System                  interface{} `json:"system,omitempty"`
-	Tag                     interface{} `json:"tag,omitempty"`
-	Talkgroup               interface{} `json:"talkgroup,omitempty"`
+	Date                    any `json:"date,omitempty"`
+	Group                   any `json:"group,omitempty"`
+	Limit                   any `json:"limit,omitempty"`
+	Offset                  any `json:"offset,omitempty"`
+	Sort                    any `json:"sort,omitempty"`
+	System                  any `json:"system,omitempty"`
+	Tag                     any `json:"tag,omitempty"`
+	Talkgroup               any `json:"talkgroup,omitempty"`
 	searchPatchedTalkgroups bool
 }
 
-func (searchOptions *CallsSearchOptions) fromMap(m map[string]interface{}) error {
+func (searchOptions *CallsSearchOptions) fromMap(m map[string]any) error {
 	switch v := m["date"].(type) {
 	case string:
 		if t, err := time.Parse(time.RFC3339, v); err == nil {

@@ -20,21 +20,32 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | -------------------------------------------------------------- | --- | -------- |
 | [Trunk Recorder](https://github.com/robotastic/trunk-recorder) | X   | X        |
 | [RTLSDR-Airband](https://github.com/szpajder/RTLSDR-Airband)   |     | X        |
-| [sdrtrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
+| [SDRTrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
 | [ProScan](https://www.proscan.org/)                            |     | X        |
+| [DSDPlus Fast Lane](https://https://www.dsdplus.com/)          |     | X        |
 
 # Quick start
 
-NOTE: this UPPERCASED warning below has no basis in reality or the open-source world, and should be disregarded at all costs; it has been reproduced from the upstream repository, a land where pull requests are shunned, issues are welcomed (then shunned), and your contributions have no place in The One True Master's Glorious Vision.
+1. Download the latest precompiled version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) from the [releases tab](https://github.com/chuot/rdio-scanner/releases).
 
-~ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rdio-scanner) FROM ITS OFFICIAL REPOSITORY AT **[HTTPS://GITHUB.COM/CHUOT/RDIO-SCANNER](https://github.com/chuot/rdio-scanner)**.~
+   | Operating system | Architecture | Use package                           |
+   | -----------------| ------------ | ------------------------------------- |
+   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3.zip |
+   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3.zip     |
+   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3.zip   |
+   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3.zip     |
+   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3.zip   |
+   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
+   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3.zip   |
+   | Windows          | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
 
-1. Download the the latest precompiled version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) from the [releases tab](https://github.com/chuot/rdio-scanner/releases).
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 4. Access the administrative dashboard to finalize the configuration.
 
 More detailed instructions are available in the `rdio-scanner.pdf` file provided in the precompiled archives.
 
-If you are updating from version 5, please refer to [docs/update-from-v5.md](docs/update-from-v5.md) before proceeding.
+# Docker
+
+As a courtesy to Docker users, [Rdio Scanner](https://github.com/chuot/rdio-scanner) is also distributed as a Docker image where a new version is generated with each new release. More information available at **[https://hub.docker.com/repository/docker/chuot/rdio-scanner](https://hub.docker.com/repository/docker/chuot/rdio-scanner)**.

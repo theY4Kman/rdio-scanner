@@ -26,15 +26,15 @@ import (
 )
 
 type Apikey struct {
-	Id       interface{} `json:"_id"`
-	Disabled bool        `json:"disabled"`
-	Ident    string      `json:"ident"`
-	Key      string      `json:"key"`
-	Order    interface{} `json:"order"`
-	Systems  interface{} `json:"systems"`
+	Id       any    `json:"_id"`
+	Disabled bool   `json:"disabled"`
+	Ident    string `json:"ident"`
+	Key      string `json:"key"`
+	Order    any    `json:"order"`
+	Systems  any    `json:"systems"`
 }
 
-func (apikey *Apikey) FromMap(m map[string]interface{}) {
+func (apikey *Apikey) FromMap(m map[string]any) *Apikey {
 	switch v := m["_id"].(type) {
 	case float64:
 		apikey.Id = uint(v)
@@ -61,21 +61,23 @@ func (apikey *Apikey) FromMap(m map[string]interface{}) {
 	}
 
 	switch v := m["systems"].(type) {
-	case []interface{}:
+	case []any:
 		if b, err := json.Marshal(v); err == nil {
 			apikey.Systems = string(b)
 		}
 	case string:
 		apikey.Systems = v
 	}
+
+	return apikey
 }
 
 func (apikey *Apikey) HasAccess(call *Call) bool {
 	switch v := apikey.Systems.(type) {
-	case []interface{}:
+	case []any:
 		for _, f := range v {
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch id := v["id"].(type) {
 				case float64:
 					if id == float64(call.System) {
@@ -84,7 +86,7 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 							if tg == "*" {
 								return true
 							}
-						case []interface{}:
+						case []any:
 							for _, f := range tg {
 								switch tg := f.(type) {
 								case float64:
@@ -120,7 +122,7 @@ func NewApikeys() *Apikeys {
 	}
 }
 
-func (apikeys *Apikeys) FromMap(f []interface{}) {
+func (apikeys *Apikeys) FromMap(f []any) *Apikeys {
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
@@ -128,12 +130,14 @@ func (apikeys *Apikeys) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			apikey := &Apikey{}
 			apikey.FromMap(m)
 			apikeys.List = append(apikeys.List, apikey)
 		}
 	}
+
+	return apikeys
 }
 
 func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
@@ -194,7 +198,7 @@ func (apikeys *Apikeys) Read(db *Database) error {
 		}
 
 		if err = json.Unmarshal([]byte(systems), &apikey.Systems); err != nil {
-			apikey.Systems = []interface{}{}
+			apikey.Systems = []any{}
 		}
 
 		apikeys.List = append(apikeys.List, apikey)
@@ -215,7 +219,7 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		err     error
 		rows    *sql.Rows
 		rowIds  = []uint{}
-		systems interface{}
+		systems any
 	)
 
 	apikeys.mutex.Lock()
@@ -223,32 +227,6 @@ func (apikeys *Apikeys) Write(db *Database) error {
 
 	formatError := func(err error) error {
 		return fmt.Errorf("apikeys.write %v", err)
-	}
-
-	for _, apikey := range apikeys.List {
-		switch apikey.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = apikey.Systems
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerApiKeys` where `_id` = ?", apikey.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerApiKeys` (`_id`, `disabled`, `ident`, `key`, `order`, `systems`) values (?, ?, ?, ?, ?, ?)", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerApiKeys` set `_id` = ?, `disabled` = ?, `ident` = ?, `key` = ?, `order` = ?, `systems` = ? where `_id` = ?", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
 	}
 
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerApiKeys`"); err != nil {
@@ -288,6 +266,32 @@ func (apikeys *Apikeys) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, apikey := range apikeys.List {
+		switch apikey.Systems {
+		case "*":
+			systems = `"*"`
+		default:
+			systems = apikey.Systems
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerApiKeys` where `_id` = ?", apikey.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerApiKeys` (`_id`, `disabled`, `ident`, `key`, `order`, `systems`) values (?, ?, ?, ?, ?, ?)", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerApiKeys` set `_id` = ?, `disabled` = ?, `ident` = ?, `key` = ?, `order` = ?, `systems` = ? where `_id` = ?", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

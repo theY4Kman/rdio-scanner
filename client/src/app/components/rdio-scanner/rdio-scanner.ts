@@ -17,12 +17,15 @@
  * ****************************************************************************
  */
 
+import { Subscription } from "rxjs";
+
 export interface RdioScannerAvoidOptions {
     all?: boolean;
     call?: RdioScannerCall;
+    minutes?: number;
+    status?: boolean;
     system?: RdioScannerSystem;
     talkgroup?: RdioScannerTalkgroup;
-    status?: boolean;
 }
 
 export interface RdioScannerBeep {
@@ -90,13 +93,18 @@ export enum RdioScannerCategoryType {
 }
 
 export interface RdioScannerConfig {
+    afs?: string;
+    branding?: string;
     dimmerDelay: number | false;
+    email?: string;
     groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
+    playbackGoesLive: boolean;
     showListenersCount: boolean;
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };
     tagsToggle: boolean;
+    time12hFormat: boolean;
 }
 
 export interface RdioScannerEvent {
@@ -125,9 +133,15 @@ export interface RdioScannerKeypadBeeps {
     [RdioScannerBeepStyle.Denied]: RdioScannerBeep[];
 }
 
+export interface RdioScannerLivefeed {
+    active: boolean;
+    minutes: number | undefined;
+    timer: Subscription | undefined;
+}
+
 export interface RdioScannerLivefeedMap {
-    [key: string]: {
-        [key: string]: boolean;
+    [key: number]: {
+        [key: number]: RdioScannerLivefeed;
     };
 }
 
@@ -159,7 +173,7 @@ export interface RdioScannerSearchOptions {
 export interface RdioScannerSystem {
     id: number;
     label: string;
-    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
+    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'orange' | 'red' | 'white' | 'yellow';
     order?: number;
     talkgroups: RdioScannerTalkgroup[];
     units: RdioScannerUnit[];
@@ -170,7 +184,7 @@ export interface RdioScannerTalkgroup {
     group: string;
     id: number;
     label: string;
-    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
+    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'orange' | 'red' | 'white' | 'yellow';
     name: string;
     tag: string;
 }

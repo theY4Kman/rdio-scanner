@@ -54,17 +54,6 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    start(): void {
-        this.rdioScannerService.startLivefeed();
-    }
-
-    stop(): void {
-        this.rdioScannerService.stopLivefeed();
-
-        this.searchPanel?.close();
-        this.selectPanel?.close();
-    }
-
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
     }
@@ -81,7 +70,7 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
          * 
          */
         timer(10000).subscribe(() => {
-            const ua: String = navigator.userAgent;
+            const ua: string = navigator.userAgent;
 
             if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
                 this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });
@@ -90,6 +79,21 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
         /**
          * END OF RED TAPE.
          */
+    }
+
+    scrollTop(e: HTMLElement): void {
+        setTimeout(() => e.scrollTo(0, 0));
+    }
+
+    start(): void {
+        this.rdioScannerService.startLivefeed();
+    }
+
+    stop(): void {
+        this.rdioScannerService.stopLivefeed();
+
+        this.searchPanel?.close();
+        this.selectPanel?.close();
     }
 
     toggleFullscreen(): void {

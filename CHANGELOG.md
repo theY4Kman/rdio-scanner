@@ -1,39 +1,191 @@
 # Change log
 
+## Version 6.6
+
+- From now on precompiled versions of macOS will be named as such instead of darwin.
+- Better example for rtlsdr-airband that leverage the new #TGHZ, #TGKHZ and #TGMHZ meta tags for dirwatch.
+- Fixed dirwatch definition not always showing mask field when type is default.
+- Fixed truncated source ids with SDRTrunk parser (issue #265).
+- Fixed admin logs not updating if no results are found.
+- New parameter http://host:port/?id=xyz added to URL that allows multiple client instances with different talkgroup selections to be retained accross sessions.
+
+_v6.6.1_
+
+- Fixed search issue (issue #267).
+
+_v6.6.2_
+
+- Fixed authentication endless loop if wrong access code is entered.
+
+_v6.6.3_
+
+- Fixed dirwatch validation for type trunk-recorder (issue #280).
+
+## Version 6.5
+
+- Fixed API looping on malformed or invalid multipart content (issue #181, #212).
+- Source code updated to GO 1.18 with `interface{}` replaced by `any`.
+- Removed ingest mutex for performance reasons.
+- Replaced all `path.Base()` by `filepath.Base()` to fix an issue with audio filenames on Windows.
+- New `Branding Label` and `Email Support` options to show on main screen (issue #220).
+- New temporary avoid feature (discussion #218).
+- Fixed remote address regexp (issue #225).
+- Added the `ident` to `new listener` log message (discussion #226).
+- New populated talkgroups won't be activated on the client if its group (or tag) is turned off (issue #227).
+- Removed the duplicated webapp section from the PDF document.
+
+_v6.5.1_
+
+- Fixed broken functionality for `HOLD SYS` and `HOLD TG` (issue #228).
+
+_v6.5.2_
+
+- Fixed erratic listeners count.
+- Show call date on main screen when call is older than one day (issue #229).
+- Fixed dirwatch #DATE, #TIME and #ZTIME regexp to accomodate filenames like 20220711082833 (issue #235).
+
+_v6.5.3_
+
+- Return of the -admin_password option to reset the administrator password in case of forgetting.
+- New `<iframe>` wrapper in `docs/examples/iframe` for those who want to give more information to their users.
+- Fixed systems.write constraint failed (issue #241).
+- Add filename to dirwatch error messages (issue #248).
+- Dirwatch.type=default now defaults to the current date and time if none are provided by the metatags (discussion #250).
+
+_v6.5.4_
+
+- Fixed some warnings when linting server code.
+- New dirwatch type `DSDPlus Fast Lane` (discussion #244).
+- Added new error catches on dirwatch (issue 254).
+- Fixed search by inaccurate time (issue #258).
+- Reverted sync.Map to regular map with sync.Mutex.
+
+_v6.5.5_
+
+- Fixed concurrent map read and map write on dirwatch.
+
+_v6.5.6_
+
+- Fixed Clients lockup by removing mutex on some unecessary Clients methods.
+- Better `DSDPlus Fast Lane` parser. Tested with `ConP(BS)`, `DMR(BS)`, `NEXEDGE48(CS)`, `NEXEDGE48(CB)`, `NEXEDGE48(TB)`, `NEXEDGE96(CB)`, `NEXEDGE96(CS)`, `NEXEDGE96(TB)`, `P25(BS)` and `P25`.
+- Fixed unit aliases not displaying on the main screen under certain circumstances.
+- New incremental debouncer for emitting listeners count.
+
+## Version 6.4
+
+- New `-cmd` command line options to allow advanced administrative tasks.
+- New playback mode goes live options which is not enabled by default (issue #175).
+- Fixed logs retrieval from administrative dashboard (issue #193).
+- Improved field conversions when retrieving calls from a mysql/mariadb database (issue #194, #198).
+- Highlight replayed call on the history list (issue #196).
+
+_v6.4.1_
+
+- New 12-Hour time format option (issue #205).
+- New audio conversion options which replace the disable audio conversion option.
+- Keep database connections open and don't close them when idle.
+- Log the origin of listeners.
+- Fixed timestamp format when checking for call duplicates.
+- Fixed http timeouts on call ingestions or admin config save when dowstream takes too long (issue #197).
+
+_v6.4.2_
+
+- Revert the last changes to the SDR Trunk parser (issue #206).
+
+_v6.4.3_
+
+- Add a note on the dirwatch admin screen about sdr-trunk.
+- Starts client read/write pumps before registering with the controller (issue #181, #212).
+
+_v6.4.4_
+
+- Don't emit calls to listeners in separate GO routine to stay in sync with call ingestion.
+
+_v6.4.5_
+
+- SQL idle connections now expiring after 1 minute.
+- Reverted defer rows.Close() to simple rows.Close().
+
+## Version 6.3
+
+- Changed scroll speed when drag droping talkgroups or units in a system (discussion #170).
+- System Ids listed in the `Config / Options / AFS Systems` will have their talkgroup Ids displayed in AFS format (issue #163).
+- New dirwatch meta tags #GROUP #SYSLBL #TAG #TGAFS and #UNIT for better ProScan compatibility (issue #164).
+- Playback mode will now catch up to live (issue #175).
+- Dirwatch code rewrite (issue #177).
+
+_v6.3.1_
+
+- Playback mode catch up to live, then swith to livefeed mode.
+- Removed the mutex lock on Clients.Count which led to a deadlock and froze call ingestion.
+
+_v6.3.2_
+
+- New #TGLBL metatag for dirwatch for ProScan (%C) or alike.
+- Fixed `semacquire` lockup in Clients (issue #177, #181, #182).
+- Replay button now replays from history if pressed multiple times quickly (issue #186).
+
+_v6.3.3_
+
+- Fixed concurrent map writes fatal error in dirwatch (issue #187).
+- Brighter LED colors and new orange color.
+- Fixed call id when retrieved from a MySQL database.
+- Add loudnorm audio filter to the ffmpeg audio conversion.
+- Show the real IP address in the logs taking into account if behind a proxy.
+- Fixed panic when emitting a call to clients.
+
+_v6.3.4_
+
+- Fixed ffmpeg audio filter not available on older version (issue #189).
+- Improved logging when run as a service, Windows users can now see these logs in the events viewer.
+- Dirwatch now catches panic errors and logs them.
+
+_v6.3.5_
+
+- Replace standard map with sync.map in dirwatch.
+- Fixed the ffmpeg version test.
+- Fixed led color type, orage -> orange.
+- Fixed incorrect options when reading from a mysql database (issue #190).
+
+_v6.3.6_
+
+- Fixed systems order properties not sent to clients.
+- Fixed side panels not scrolling to top when opened.
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.
 - New show listeners count options which is disabled by default (issue #125).
-- Fix panic: concurrent write to websocket connection on goroutine.
-- Fix units import from SDR Trunk (issue #150).
+- Fixed panic: concurrent write to websocket connection on goroutine.
+- Fixed units import from SDR Trunk (issue #150).
 
 _v6.2.1_
 
-- Fix SIGSEGV error in Units.Merge (issue #151).
+- Fixed SIGSEGV error in Units.Merge (issue #151).
 
 _v6.2.2_
 
-- Fix another SIGSEGV error in Units.Merge (issue #151).
+- Fixed another SIGSEGV error in Units.Merge (issue #151).
 
 _v6.2.3_
 
 - New random UUID in the JSON-Web Token payload.
-- Fix dirwatch not properly shutting down when a new configuration is applied.
-- Fix dashboard logout not sending HTTP 200 OK status.
+- Fixed dirwatch not properly shutting down when a new configuration is applied.
+- Fixed dashboard logout not sending HTTP 200 OK status.
 - Clear the active dirwatch list when stopped.
 - Pauses calls ingestion before database pruning.
-- Fix regex for units in driwatch type SDRTrunk (discussion #155).
+- Fixed regex for units in driwatch type SDRTrunk (discussion #155).
 - Update SQLite driver.
 
 _v6.2.4_
 
-- Fix call frequencies table not being transmitted to downstream.
+- Fixed call frequencies table not being transmitted to downstream.
 - Avoid using setInterval and setTimeout in the webapp.
-- Fix talkgroup search filter upon new configuration (issue #158).
+- Fixed talkgroup search filter upon new configuration (issue #158).
 
 _v6.2.5_
 
-- Fix unnecessary auto populate of unit id/label (issue #160).
+- Fixed unnecessary auto populate of unit id/label (issue #160).
 
 ## Version 6.1
 
@@ -41,55 +193,55 @@ _v6.2.5_
 - New search patched talkgroups option which is disabled by default.
 - Talkgroups and units are now stored in their own database table.
 - New units CSV importer.
-- Fix blacklisted talkgroups being created anyway when autopopulate is enabled.
-- Fix compatibility with mysql/mariadb (default sqlite is still recommended).
+- Fixed blacklisted talkgroups being created anyway when autopopulate is enabled.
+- Fixed compatibility with mysql/mariadb (default sqlite is still recommended).
 
 _v6.1.1_
 
-- Fix `unknown datetime format sql.NullString` error.
+- Fixed `unknown datetime format sql.NullString` error.
 
 _v6.1.2_
 
-- Fix image links in webapp.md (issue #76).
-- Fix SIGSEGV when trying to autopopulate (issue #77).
-- Fix parsing SDRTrunk meta data.
+- Fixed image links in webapp.md (issue #76).
+- Fixed SIGSEGV when trying to autopopulate (issue #77).
+- Fixed parsing SDRTrunk meta data.
 - Dirwatch type trunk-recorder now deletes json files without audio (when deleteAfter is set).
 - Add a new `docs/update-from-v5.md` document.
 
 _v6.1.3_
 
-- Fix concurrent config write when autopopulate is enabled (issue #77).
-- Fix API in regards to audio filename and audio type (issue #78).
-- Fix migration error on mysql database (issue #86).
-- Fix some calls not playing on the native app (issue #87).
-- Fix admin password not read from mysql.
+- Fixed concurrent config write when autopopulate is enabled (issue #77).
+- Fixed API in regards to audio filename and audio type (issue #78).
+- Fixed migration error on mysql database (issue #86).
+- Fixed some calls not playing on the native app (issue #87).
+- Fixed admin password not read from mysql.
 
 _v6.1.4_
 
 - Talkgroup label now syncs with the talkgroup_tag from the API or dirwatch (issue #80).
-- Fix more migration errors on mysql database (issue #86).
-- Fix config export not working with non latin-1 characters (issue #89).
-- Fix talkgroup label from dirwatch type sdrtrunk (discussion #98).
-- Fix SIGSEGV (issue #100).
+- Fixed more migration errors on mysql database (issue #86).
+- Fixed config export not working with non latin-1 characters (issue #89).
+- Fixed talkgroup label from dirwatch type sdrtrunk (discussion #98).
+- Fixed SIGSEGV (issue #100).
 - New `patch` indicator for patched talkgroups.
 
 _v6.1.5_
 
-- Fix trunk-recorder API (issue #104).
-- Fix for avoid/patch flags on main display not beaving as expected.
-- Fix downstream not sending sources data.
-- Fix dirwatch crashing when config is updated.
+- Fixed trunk-recorder API (issue #104).
+- Fixed for avoid/patch flags on main display not beaving as expected.
+- Fixed downstream not sending sources data.
+- Fixed dirwatch crashing when config is updated.
 
 _v6.1.6_
 
-- Fix webapp not reporting the correct version.
+- Fixed webapp not reporting the correct version.
 
 _v6.1.7_
 
 - More concurrency mutexes to resolve SQL_BUSY errors.
 - Better internal management of dirwatches.
-- Fix SDRTrunk files not being ingested (discussion #108).
-- Fix Trunk Recorder talkgroup_tag assign to the wrong property (issue #115).
+- Fixed SDRTrunk files not being ingested (discussion #108).
+- Fixed Trunk Recorder talkgroup_tag assign to the wrong property (issue #115).
 - Improved the way the talkgroup label and name are autopopulated. If Trunk Recorder sends a talkgroup_tag with an empty value or with a single `-`, it will not overwrite the talkgroup label.
 
 _v6.1.8_
@@ -98,8 +250,8 @@ _v6.1.8_
 
 _v6.1.9_
 
-- Fix talkgroup sorting issue when importing from a CSV file (issue #119).
-- Fix SIGSEGV (issue #120).
+- Fixed talkgroup sorting issue when importing from a CSV file (issue #119).
+- Fixed SIGSEGV (issue #120).
 
 _v6.1.10_
 
@@ -107,36 +259,36 @@ _v6.1.10_
 
 _v6.1.11_
 
-- Fix connection errors when behind a reverse-proxy.
-- Fix disappearing talkgroups (issue #127).
+- Fixed connection errors when behind a reverse-proxy.
+- Fixed disappearing talkgroups (issue #127).
 
 _v6.1.12_
 
-- Fix too many open files (issue #129).
+- Fixed too many open files (issue #129).
 - Cosmetic: AVOID and PATCH flags now only appear when needed.
 
 _v6.1.13_
 
 - Better handling of dead client connections.
-- Fix too many open files (issue #129).
+- Fixed too many open files (issue #129).
 - Remove net.http error messages from the output (issue #131).
 
 _v6.1.14_
 
-- Fix FAQ section not being added to the PDF documents.
+- Fixed FAQ section not being added to the PDF documents.
 - Bump delay before killing unauthenticated clients from 10 seconds to 60 seconds.
 - Remove the gitter.im support forum from the documentation and prefer github discussions.
 
 _v6.1.15_
 
-- Fix access and downstreams order not retained.
+- Fixed access and downstreams order not retained.
 - Remove the self-signed certificate generator (-ssl create) as it was causing more problems than solutions.
 - Client handling and call ingestion now run on 2 different threads (issue #135).
-- Fix downstream talkgroup select keeps reverting to all talkgroups (issue #136).
+- Fixed downstream talkgroup select keeps reverting to all talkgroups (issue #136).
 
 _v6.1.16_
 
-- Fix concurrent map access for clients.
+- Fixed concurrent map access for clients.
 - Some tweaks to websocket management.
 
 ## Version 6.0
@@ -161,24 +313,24 @@ The backend server has been completely rewritten in GO language. Therefore, all 
 
 _v6.0.1_
 
-- Fix button sound on select panel for TG (beep state inverted)
+- Fixed button sound on select panel for TG (beep state inverted)
 - Auto populate system units (issue #66)
 
 _v6.0.2_
 
 - Try to fix the SQL_BUSY error (issue #67).
-- Fix `-service stop` timing out before exiting.
+- Fixed `-service stop` timing out before exiting.
 - Drop the ApiKey uniqueness of the downstreams database table.
-- Fix auto-populating the database with empty units tag.
+- Fixed auto-populating the database with empty units tag.
 
 _v6.0.3_
 
-- Fix strconv.Atoi: invalid syntax for dirwatch type sdrtrunk.
-- Fix the new version available dialog opening more than once.
+- Fixed strconv.Atoi: invalid syntax for dirwatch type sdrtrunk.
+- Fixed the new version available dialog opening more than once.
 
 _v6.0.4_
 
-- Fix wrong time calculation in prune scheduler.
+- Fixed wrong time calculation in prune scheduler.
 - More fix on the SQL_BUSY error (issue #67).
 - Support files (certs, db, ini) are now created in the same folder as the executable, if the folder is writable, or under a `Rdio Scanner` folder in the user's home folder.
 - Some code refactoring.
@@ -191,26 +343,26 @@ _v6.0.5_
 
 _v6.0.6_
 
-- Fix an issue with not closing the database when restarting the host platform (issue #71).
+- Fixed an issue with not closing the database when restarting the host platform (issue #71).
 - Fixed SDRTunk parser when artist tag contains CTCSS tones.
 - Platforms linux/amd64, linux/arm and linux/arm64 are now available for the Docker container.
 
 _v6.0.7_
 
-- Fix dropped connections when going through a proxy.
+- Fixed dropped connections when going through a proxy.
 
 ## Version 5.2
 
 - Change to how the server reports version.
-- Fix cmd.js exiting on inexistant session token keystore.
-- Fix issue with iframe.
+- Fixed cmd.js exiting on inexistant session token keystore.
+- Fixed issue with iframe.
 - Node modules updated for security fixes.
 
 _v5.2.1_
 
-- Fix talkgroup header on the search panel (issue #47).
+- Fixed talkgroup header on the search panel (issue #47).
 - Update dirwatch meta tags #DATE, #TIME and #ZTIME for SDRSharp compatibility (issue #48).
-- Fix dirwath date and time parsing bug.
+- Fixed dirwath date and time parsing bug.
 - Configurable call duplicate detection time frame.
 
 _v5.2.2_
@@ -221,13 +373,13 @@ _v5.2.2_
 _v5.2.3_
 
 - Change history columns padding from 1px to 6px on the main screen.
-- Fix a bug in the admin api where the server crash when saving new config from the admin dashboard.
+- Fixed a bug in the admin api where the server crash when saving new config from the admin dashboard.
 
 _v5.2.4_
 
 - Updated to Angular 12.2.
 - New update prompt for clients when server is updated.
-- Fix unaligned back arrow on the search panel.
+- Fixed unaligned back arrow on the search panel.
 
 _v5.2.5_
 
@@ -238,20 +390,20 @@ _v5.2.5_
 
 _v5.2.6_
 
-- Fix crash when when options.pruneDays = 0.
+- Fixed crash when when options.pruneDays = 0.
 
 _v5.2.7_
 
-- Fix handling of JSON datatypes on MySQL/MariaDB database backend.
-- Fix listeners count.
+- Fixed handling of JSON datatypes on MySQL/MariaDB database backend.
+- Fixed listeners count.
 
 _V5.2.8_
 
-- Fix SQLite does not support TEXT with options.
+- Fixed SQLite does not support TEXT with options.
 
 _V5.2.9_
 
-- Fix bad code for server options parsing.
+- Fixed bad code for server options parsing.
 - Increase dirwatch polling interval from 1000ms to 2500ms.
 
 ## Version 5.1
@@ -274,15 +426,15 @@ This one is a big one... **Be sure to backup your config.json and your database.
 
 _v5.1.1_
 
-- Fix database migration script to version 5.1 to filter out duplicate property values on unique fields.
-- Fix payload too large error message when saving configuration from the administrative dashboard.
+- Fixed database migration script to version 5.1 to filter out duplicate property values on unique fields.
+- Fixed payload too large error message when saving configuration from the administrative dashboard.
 - Bring back the load-rrdb, load-tr and random uuid command line tools.
 
 _v5.1.2_
 
-- Fix config class not returning proper id properties when new records are added.
-- Fix database migration script to version 5.1 when on mysql.
-- Fix bad logic in apiKey validation.
+- Fixed config class not returning proper id properties when new records are added.
+- Fixed database migration script to version 5.1 when on mysql.
+- Fixed bad logic in apiKey validation.
 - Remove the autoJsonMap from the sequelize dialectOptions.
 - Client updated to angular 12.
 
@@ -296,15 +448,15 @@ _v5.1.2_
 _v5.0.1_
 
 - Remove the EBU R128 loudness normalization as it's not working as intended.
-- Fix the API key validation when using the complex syntax.
+- Fixed the API key validation when using the complex syntax.
 
 _v5.0.2_
 
-- Fix rdioScanner.options.disableAudioConversion which was ignored when true.
+- Fixed rdioScanner.options.disableAudioConversion which was ignored when true.
 
 _v5.0.3_
 
-- Fix error with docker builds where sequelize can't find the sqlite database.
+- Fixed error with docker builds where sequelize can't find the sqlite database.
 
 _v5.0.4_
 
@@ -331,7 +483,7 @@ _v4.9.1_
 
 - Add EBU R128 loudness normalization.
 - dirWatch.type="trunk-recorder" now deletes the JSON file in case the audio file is missing.
-- Fix downstream sending wrong talkgroup id.
+- Fixed downstream sending wrong talkgroup id.
 
 _v4.9.2_
 
@@ -341,8 +493,8 @@ _v4.9.2_
 
 - Add downstream.system.id_as property to allow export system with a different id.
 - Add system.order for system list ordering on the client side.
-- Fix client main screen unscrollable overflow while in landscape.
-- Fix issue 26 - date in documentation for mask isn't clear.
+- Fixed client main screen unscrollable overflow while in landscape.
+- Fixed issue 26 - date in documentation for mask isn't clear.
 - The skip button now also allows you to skip the one second delay between calls.
 - Node modules update.
 
@@ -353,26 +505,26 @@ _v4.8.1_
 
 _v4.8.2_
 
-- Fix dirWatch.type='sdr-trunk' metatag artist as source is now optional.
-- Fix dirWatch.type='sdr-trunk' metatag title as talkgroup.id.
+- Fixed dirWatch.type='sdr-trunk' metatag artist as source is now optional.
+- Fixed dirWatch.type='sdr-trunk' metatag title as talkgroup.id.
 - Web app now running with Angular 11.
 - Node modules update.
 
 _v4.8.3_
 
 - Add the ability to overwrite the default dirWatch extension for type sdr-trunk and trunk-recorder.
-- Fix dirWatch.disabled being ignored.
+- Fixed dirWatch.disabled being ignored.
 - Node modules update.
 
 _v4.8.4_
 
-- Fix the timezone issue when on mariadb.
-- Fix downstream sending wrong talkgroup id.
+- Fixed the timezone issue when on mariadb.
+- Fixed downstream sending wrong talkgroup id.
 - Node modules security update.
 
 _v4.8.5_
 
-- Fix broken dirwatch.delay.
+- Fixed broken dirwatch.delay.
 - Node modules update.
 
 ## Version 4.7
@@ -386,37 +538,37 @@ _v4.8.5_
 
 _v4.7.1_
 
-- Fix crash on client when access to talkgroups is restricted with a password.
+- Fixed crash on client when access to talkgroups is restricted with a password.
 
 _v4.7.2_
 
-- Fix Keypad beeps not working on iOS.
-- Fix pause not going off due to the above bug.
+- Fixed Keypad beeps not working on iOS.
+- Fixed pause not going off due to the above bug.
 
 _v4.7.3_
 
-- Fix websocket not connection on ssl.
+- Fixed websocket not connection on ssl.
 
 _v4.7.4_
 
-- Fix display width too wide when long talkgroup name.
+- Fixed display width too wide when long talkgroup name.
 
 _v4.7.5_
 
-- Fix playback mode getting mixed up if clicking too fast on play.
-- Fix side panels background color inheritance.
+- Fixed playback mode getting mixed up if clicking too fast on play.
+- Fixed side panels background color inheritance.
 - Node modules update.
 
 _v4.7.6_
 
-- Fix search results not going back to page 1 when search filters are modified.
+- Fixed search results not going back to page 1 when search filters are modified.
 - Skip next button no longer emit a denied beeps sequence when pushed while there's no audio playing.
 - Node modules update.
 
 ## Version 4.6
 
-- Fix documentation in regards to load-rrd in install-github.md.
-- Fix database absolute path in config.json.
+- Fixed documentation in regards to load-rrd in install-github.md.
+- Fixed database absolute path in config.json.
 - Remove config.options.useLed.
 - Rename Config.options.keyBeep to Config.options.keypadBeeps.
 - Config.options.keypadBeeps now with presets instead of full pattern declaration.
@@ -432,7 +584,7 @@ _v4.7.6_
 - Config.systems.talkgroups.patches to group many talkgroups (patches) into one talkgroup.id.
 - Config.options now groups allowDownloads, disableAudioConversion, pruneDays, useDimmer, useGroup and useLed options instead of having them spread all over the config file.
 - Client will always display talkgroup id on the right side instead of 0 when call is analog.
-- Fix annoying bug when next call queued to play is still played even though offline continuous play mode is turned off.
+- Fixed annoying bug when next call queued to play is still played even though offline continuous play mode is turned off.
 - Talkgroup ID is displayed no matter what and unit ID is displayed only if known.
 
 ## Version 4.3
@@ -441,15 +593,15 @@ _v4.7.6_
 - Automatic database migration on startup.
 - Client now on Angular 10 in strict mode.
 - Dockerized.
-- Fix downstream not being triggered when a new call imported.
-- Fix dirWatch mask parser and new mask metatags.
-- Fix stop button on the search panel when in offline play mode.
-- Fix SSL certificate handling.
+- Fixed downstream not being triggered when a new call imported.
+- Fixed dirWatch mask parser and new mask metatags.
+- Fixed stop button on the search panel when in offline play mode.
+- Fixed SSL certificate handling.
 - Rewritten documentation.
 
 ## Version 4.2
 
-- Fix possible race conditions....
+- Fixed possible race conditions....
 - Added websocket keepalive which helps mobile clients when switching from/to wifi/wan.
 - Better playback offline mode animations and queue count.
 - New dirWatch.mask option to simplify meta data import.

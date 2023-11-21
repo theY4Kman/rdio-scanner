@@ -30,7 +30,7 @@ type Unit struct {
 	Order uint   `json:"order"`
 }
 
-func (unit *Unit) FromMap(m map[string]interface{}) {
+func (unit *Unit) FromMap(m map[string]any) *Unit {
 	switch v := m["id"].(type) {
 	case float64:
 		unit.Id = uint(v)
@@ -46,6 +46,7 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 		unit.Order = uint(v)
 	}
 
+	return unit
 }
 
 type Units struct {
@@ -77,7 +78,7 @@ func (units *Units) Add(id uint, label string) (*Units, bool) {
 	return units, added
 }
 
-func (units *Units) FromMap(f []interface{}) {
+func (units *Units) FromMap(f []any) *Units {
 	units.mutex.Lock()
 	defer units.mutex.Unlock()
 
@@ -85,12 +86,14 @@ func (units *Units) FromMap(f []interface{}) {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			unit := &Unit{}
 			unit.FromMap(m)
 			units.List = append(units.List, unit)
 		}
 	}
+
+	return units
 }
 
 func (u *Units) Merge(units *Units) bool {
@@ -167,25 +170,6 @@ func (units *Units) Write(db *Database, systemId uint) error {
 		return fmt.Errorf("units.write: %v", err)
 	}
 
-	for _, unit := range units.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `id` from `rdioScannerUnits` where `systemId` = ?", systemId); err != nil {
 		return formatError(err)
 	}
@@ -224,5 +208,25 @@ func (units *Units) Write(db *Database, systemId uint) error {
 			}
 		}
 	}
+
+	for _, unit := range units.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
+	}
+
 	return nil
 }

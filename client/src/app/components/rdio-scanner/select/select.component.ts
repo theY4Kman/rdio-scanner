@@ -77,7 +77,7 @@ export class RdioScannerSelectComponent implements OnDestroy, AfterViewInit {
             this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
 
         } else if (options?.system !== undefined && options?.talkgroup !== undefined) {
-            this.rdioScannerService.beep(this.map[options!.system.id][options!.talkgroup.id]
+            this.rdioScannerService.beep(this.map[options!.system.id][options!.talkgroup.id].active
                 ? RdioScannerBeepStyle.Deactivate
                 : RdioScannerBeepStyle.Activate
             );
