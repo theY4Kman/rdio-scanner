@@ -19,7 +19,7 @@
 
 'use strict';
 
-const server = 'http://localhost:3000';
+const server = process.env.API_URL || `http://localhost:3000`
 
 module.exports = [
     {
