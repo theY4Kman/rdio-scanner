@@ -17,20 +17,18 @@
  * ****************************************************************************
  */
 
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { timer } from 'rxjs';
 import { RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
 import { RdioScannerService } from './rdio-scanner.service';
-import { RdioScannerNativeComponent } from './native/native.component';
 
 @Component({
     selector: 'rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
 })
-export class RdioScannerComponent implements OnDestroy, OnInit {
+export class RdioScannerComponent implements OnDestroy {
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
@@ -56,29 +54,6 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
-    }
-
-    ngOnInit(): void {
-        /*
-         * BEGIN OF RED TAPE:
-         * 
-         * By modifying, deleting or disabling the following lines, you harm
-         * the open source project and its author.  Rdio Scanner represents a lot of
-         * investment in time, support, testing and hardware.
-         * 
-         * Be respectful, sponsor the project if you can, use native apps when possible.
-         * 
-         */
-        timer(10000).subscribe(() => {
-            const ua: string = navigator.userAgent;
-
-            if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
-                this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });
-            }
-        });
-        /**
-         * END OF RED TAPE.
-         */
     }
 
     scrollTop(e: HTMLElement): void {

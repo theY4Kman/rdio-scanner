@@ -24,7 +24,6 @@ import { RdioScannerComponent } from './rdio-scanner.component';
 import { RdioScannerService } from './rdio-scanner.service';
 import { RdioScannerMainComponent } from './main/main.component';
 import { RdioScannerSupportComponent } from './main/support/support.component';
-import { RdioScannerNativeModule } from './native/native.module';
 import { RdioScannerSearchComponent } from './search/search.component';
 import { RdioScannerSelectComponent } from './select/select.component';
 import { KeyboardShortcutsModule } from '@egoistdeveloper/ng-keyboard-shortcuts';
@@ -40,7 +39,6 @@ import { KeyboardShortcutsModule } from '@egoistdeveloper/ng-keyboard-shortcuts'
     exports: [RdioScannerComponent],
     imports: [
       AppSharedModule,
-      RdioScannerNativeModule,
       KeyboardShortcutsModule.forRoot(),
     ],
     providers: [
