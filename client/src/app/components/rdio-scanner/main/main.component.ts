@@ -56,7 +56,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     callDate: Date | undefined;
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
-    callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
+    callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(30);
     callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
     callDuration = 0;
@@ -587,6 +587,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     private stopPausedDurationTimer(): void {
         this.pausedDurationTimer?.unsubscribe();
         this.pausedDurationTimer = undefined;
+        this.livefeedPausedSeconds = 0;
     }
 
     private updateDimmer(): void {
