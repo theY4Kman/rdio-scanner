@@ -204,24 +204,27 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.rdioScannerService.loadAndPlay(id);
     }
 
-    authFocus(): void {
-        if (this.auth && this.authPassword instanceof MatInput) {
-            this.authPassword.focus();
+    authFocus(): boolean {
+        if (this.auth) {
+            if (this.authPassword instanceof MatInput) {
+              this.authPassword.focus();
+            }
+            return true;
         }
+
+        return false;
     }
 
     avoid(options?: RdioScannerAvoidOptions): void {
         const call = this.call || this.callPrevious;
 
-        if (this.auth) {
-            this.authFocus();
-          return;
-        }
+        if (this.authFocus()) return;
 
-      if (!options && !call) {
-        this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+        if (!options && !call) {
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
             return;
         }
+
         if (options) {
             this.rdioScannerService.avoid(options);
         } else if (call) {
@@ -229,15 +232,15 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             const minutes = this.rdioScannerService.isAvoidedTimer(call);
 
             if (!avoided) {
-                this.rdioScannerService.avoid({ status: false });
+                this.rdioScannerService.avoid({status: false});
             } else if (!minutes) {
-                this.rdioScannerService.avoid({ minutes: 30, status: false });
+                this.rdioScannerService.avoid({minutes: 30, status: false});
             } else if (minutes === 30) {
-                this.rdioScannerService.avoid({ minutes: 60, status: false });
+                this.rdioScannerService.avoid({minutes: 60, status: false});
             } else if (minutes === 60) {
-                this.rdioScannerService.avoid({ minutes: 120, status: false });
+                this.rdioScannerService.avoid({minutes: 120, status: false});
             } else {
-                this.rdioScannerService.avoid({ status: true });
+                this.rdioScannerService.avoid({status: true});
             }
         }
 
@@ -251,52 +254,43 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     }
 
     holdSystem(): void {
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
+
+        if (this.call || this.callPrevious) {
+            this.rdioScannerService.beep(this.holdSys ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
+
+            this.rdioScannerService.holdSystem();
 
         } else {
-            if (this.call || this.callPrevious) {
-                this.rdioScannerService.beep(this.holdSys ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
-
-                this.rdioScannerService.holdSystem();
-
-            } else {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
-            }
-
-            this.updateDimmer();
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
         }
+
+        this.updateDimmer();
     }
 
     holdTalkgroup(): void {
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
+
+        if (this.call || this.callPrevious) {
+            this.rdioScannerService.beep(this.holdTg ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
+
+            this.rdioScannerService.holdTalkgroup();
 
         } else {
-            if (this.call || this.callPrevious) {
-                this.rdioScannerService.beep(this.holdTg ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
-
-                this.rdioScannerService.holdTalkgroup();
-
-            } else {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
-            }
-
-            this.updateDimmer();
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
         }
+
+        this.updateDimmer();
     }
 
     livefeed(): void {
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
 
-        } else {
-            this.rdioScannerService.beep(this.livefeedOffline ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
+        this.rdioScannerService.beep(this.livefeedOffline ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
 
-            this.rdioScannerService.livefeed();
+        this.rdioScannerService.livefeed();
 
-            this.updateDimmer();
-        }
+        this.updateDimmer();
     }
 
     ngOnDestroy(): void {
@@ -310,61 +304,55 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     }
 
     pause(): void {
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
+
+        if (this.livefeedPaused) {
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+
+            this.rdioScannerService.pause();
 
         } else {
-            if (this.livefeedPaused) {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-                this.rdioScannerService.pause();
-
-            } else {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
-
-                this.rdioScannerService.pause();
-            }
-
-            this.updateDimmer();
+            this.rdioScannerService.pause();
         }
+
+        this.updateDimmer();
     }
 
     replay(): void {
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
 
-        } else {
-            if (!this.livefeedPaused && (this.call || this.callPrevious)) {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        if (!this.livefeedPaused && (this.call || this.callPrevious)) {
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-                if (this.replayTimer instanceof Subscription) {
-                    this.replayTimer.unsubscribe();
-                    this.replayOffset = Math.min(this.callHistory.length, this.replayOffset + 1);
-                }
-
-                this.replayTimer = timer(1000).subscribe(() => {
-                    this.replayTimer = undefined;
-                    this.replayOffset = 0;
-                });
-
-                if (this.call && !this.replayOffset) {
-                    this.rdioScannerService.replay()
-                } else if (this.callPrevious !== this.callHistory[0]) {
-                    if (this.replayOffset) {
-                        this.rdioScannerService.play(this.callHistory[this.replayOffset - 1]);
-                    } else {
-                        this.rdioScannerService.replay()
-                    }
-                } else if (this.replayOffset < this.callHistory.length) {
-                    this.rdioScannerService.play(this.callHistory[this.replayOffset]);
-                }
-
-            } else {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            if (this.replayTimer instanceof Subscription) {
+                this.replayTimer.unsubscribe();
+                this.replayOffset = Math.min(this.callHistory.length, this.replayOffset + 1);
             }
 
-            this.updateDimmer();
+            this.replayTimer = timer(1000).subscribe(() => {
+                this.replayTimer = undefined;
+                this.replayOffset = 0;
+            });
+
+            if (this.call && !this.replayOffset) {
+                this.rdioScannerService.replay()
+            } else if (this.callPrevious !== this.callHistory[0]) {
+                if (this.replayOffset) {
+                    this.rdioScannerService.play(this.callHistory[this.replayOffset - 1]);
+                } else {
+                    this.rdioScannerService.replay()
+                }
+            } else if (this.replayOffset < this.callHistory.length) {
+                this.rdioScannerService.play(this.callHistory[this.replayOffset]);
+            }
+
+        } else {
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
         }
+
+        this.updateDimmer();
     }
 
     showHelp(): void {
@@ -379,14 +367,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             return;
         }
 
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
 
-        } else {
-            this.rdioScannerService.beep();
+        this.rdioScannerService.beep();
 
-            this.openSearchPanel.emit();
-        }
+        this.openSearchPanel.emit();
     }
 
     showSelectPanel(): void {
@@ -394,27 +379,21 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             return;
         }
 
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
 
-        } else {
-            this.rdioScannerService.beep();
+        this.rdioScannerService.beep();
 
-            this.openSelectPanel.emit();
-        }
+        this.openSelectPanel.emit();
     }
 
     skip(options?: { delay?: boolean }): void {
-        if (this.auth) {
-            this.authFocus();
+        if (this.authFocus()) return;
 
-        } else {
-            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-            this.rdioScannerService.skip(options);
+        this.rdioScannerService.skip(options);
 
-            this.updateDimmer();
-        }
+        this.updateDimmer();
     }
 
     stop(): void {
