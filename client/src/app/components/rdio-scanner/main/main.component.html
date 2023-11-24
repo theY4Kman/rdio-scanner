@@ -162,6 +162,7 @@
         <div class="spacer"></div>
         <button class="rdio-button" (click)="pause()" [ngClass]="{ off: !livefeedPaused, on: livefeedPaused }">
             PAUSE
+            <div *ngIf="livefeedPaused" class="paused-elapsed-timer">{{ livefeedPausedSeconds | duration: 0 }}</div>
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="showSelectPanel()">

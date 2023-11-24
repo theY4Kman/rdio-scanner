@@ -22,7 +22,7 @@ import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subscription, timer } from 'rxjs';
+import { interval, Subscription, timer } from 'rxjs';
 import packageInfo from '../../../../../package.json';
 import {
     RdioScannerAvoidOptions,
@@ -89,6 +89,19 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     livefeedOffline = true;
     livefeedOnline = false;
     livefeedPaused = false;
+    livefeedPausedAt: Date | undefined;
+    livefeedPausedSeconds: number = 0;
+
+    /**
+     * Returns the duration the live feed has been paused, in seconds.
+     */
+    get livefeedPausedDuration(): number {
+        if (this.livefeedPausedAt) {
+            return (Date.now() - this.livefeedPausedAt.getTime()) / 1000;
+        }
+
+        return 0;
+    }
 
     map: RdioScannerLivefeedMap = {};
 
@@ -120,6 +133,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
     private clockTimer: Subscription | undefined;
+
+    private pausedDurationTimer: Subscription | undefined;
 
     private config: RdioScannerConfig | undefined;
 
@@ -490,6 +505,16 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             this.livefeedPaused = event.pause || false;
         }
 
+        if ('pausedAt' in event) {
+            this.livefeedPausedAt = event.pausedAt;
+
+            if (this.livefeedPausedAt) {
+                this.startPausedDurationTimer();
+            } else {
+                this.stopPausedDurationTimer();
+            }
+        }
+
         if ('queue' in event) {
             this.callQueue = event.queue || 0;
         }
@@ -549,22 +574,37 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.clockTimer = timer(1000 * (60 - this.clock.getSeconds())).subscribe(() => this.syncClock());
     }
 
+    private startPausedDurationTimer(): void {
+        this.pausedDurationTimer?.unsubscribe();
+        this.pausedDurationTimer = undefined;
+
+        this.pausedDurationTimer = interval(1000).subscribe(() => {
+            this.livefeedPausedSeconds = Math.floor(this.livefeedPausedDuration);
+            this.ngChangeDetectorRef.detectChanges();
+        });
+    }
+
+    private stopPausedDurationTimer(): void {
+        this.pausedDurationTimer?.unsubscribe();
+        this.pausedDurationTimer = undefined;
+    }
+
     private updateDimmer(): void {
-        if (typeof this.config?.dimmerDelay === 'number') {
+        if (typeof this.config?.dimmerDelay !== 'number') {
+            return;
+        }
+
+        this.dimmerTimer?.unsubscribe();
+        this.dimmer = true;
+        this.dimmerTimer = timer(this.config.dimmerDelay).subscribe(() => {
             this.dimmerTimer?.unsubscribe();
 
-            this.dimmer = true;
+            this.dimmerTimer = undefined;
 
-            this.dimmerTimer = timer(this.config.dimmerDelay).subscribe(() => {
-                this.dimmerTimer?.unsubscribe();
+            this.dimmer = false;
 
-                this.dimmerTimer = undefined;
-
-                this.dimmer = false;
-
-                this.ngChangeDetectorRef.detectChanges();
-            });
-        }
+            this.ngChangeDetectorRef.detectChanges();
+        });
     }
 
     private updateDisplay(time = this.callTime): void {

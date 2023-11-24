@@ -102,6 +102,7 @@ export class RdioScannerService implements OnDestroy {
     private livefeedMapPriorToHoldTalkgroup: RdioScannerLivefeedMap | undefined;
     private livefeedMode = RdioScannerLivefeedMode.Offline;
     private livefeedPaused = false;
+    private livefeedPausedAt: Date | undefined;
 
     private playbackList: RdioScannerPlaybackList | undefined;
     private playbackPending: number | undefined;
@@ -452,15 +453,22 @@ export class RdioScannerService implements OnDestroy {
         this.livefeedPaused = status;
 
         if (status) {
-            this.audioContext?.suspend();
+            this.livefeedPausedAt = new Date();
+
+            void this.audioContext?.suspend();
 
         } else {
-            this.audioContext?.resume();
+            this.livefeedPausedAt = undefined;
+
+            void this.audioContext?.resume();
 
             this.play();
         }
 
-        this.event.emit({ pause: this.livefeedPaused });
+        this.event.emit({
+            pause: this.livefeedPaused,
+            pausedAt: this.livefeedPausedAt,
+        });
     }
 
     play(call?: RdioScannerCall | undefined): void {

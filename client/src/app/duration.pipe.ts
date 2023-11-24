@@ -5,7 +5,7 @@ import { formatNumber } from "@angular/common";
   name: 'duration',
 })
 export class DurationPipe implements PipeTransform {
-  transform(value: number): string {
+  transform(value: number, precision: number = 1): string {
     if (value === undefined) {
       return '';
     }
@@ -24,7 +24,7 @@ export class DurationPipe implements PipeTransform {
 
     const displays = [
       ...sigParts.map((part) => formatNumber(part, 'en-US', '2.0')),
-      formatNumber(seconds, 'en-US', '2.1-1'),
+      formatNumber(seconds, 'en-US', `2.${precision}-${precision}`),
     ];
 
     return displays.join(':');
