@@ -123,6 +123,7 @@ export interface RdioScannerEvent {
     playbackList?: RdioScannerPlaybackList;
     playbackPending?: number;
     queue?: number;
+    queueDuration?: number;
     time?: number;
     tooMany?: boolean;
 }

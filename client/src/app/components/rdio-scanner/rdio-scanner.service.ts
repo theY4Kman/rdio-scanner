@@ -218,6 +218,7 @@ export class RdioScannerService implements OnDestroy {
             holdTg: false,
             map: this.livefeedMap,
             queue: this.callQueue.length,
+            queueDuration: this.callQueueDuration,
         });
     }
 
@@ -318,6 +319,7 @@ export class RdioScannerService implements OnDestroy {
                 holdTg: false,
                 map: this.livefeedMap,
                 queue: this.callQueue.length,
+                queueDuration: this.callQueueDuration,
             });
         }
     }
@@ -369,6 +371,7 @@ export class RdioScannerService implements OnDestroy {
                 holdTg: !!this.livefeedMapPriorToHoldTalkgroup,
                 map: this.livefeedMap,
                 queue: this.callQueue.length,
+                queueDuration: this.callQueueDuration,
             });
         }
     }
@@ -486,6 +489,10 @@ export class RdioScannerService implements OnDestroy {
             ? this.getPlaybackQueueCount()
             : this.callQueue.length;
 
+        const queueDuration = this.livefeedMode === RdioScannerLivefeedMode.Playback
+            ? this.getPlaybackQueueDuration()
+            : this.callQueueDuration;
+
         const arrayBuffer = new ArrayBuffer(this.call.audio.data.length);
         const arrayBufferView = new Uint8Array(arrayBuffer);
 
@@ -504,7 +511,7 @@ export class RdioScannerService implements OnDestroy {
             this.audioSource.onended = () => this.skip({ delay: true });
             this.audioSource.start();
 
-            this.event.emit({ call: this.call, queue });
+            this.event.emit({ call: this.call, queue, queueDuration });
 
             interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
@@ -518,7 +525,7 @@ export class RdioScannerService implements OnDestroy {
                 }
             });
         }, () => {
-            this.event.emit({ call: this.call, queue });
+            this.event.emit({ call: this.call, queue, queueDuration });
 
             this.skip({ delay: false });
         });
@@ -537,9 +544,17 @@ export class RdioScannerService implements OnDestroy {
         }
 
         if (this.audioSource || this.call || this.livefeedPaused || this.skipDelay) {
-            this.event.emit({
-                queue: this.livefeedMode === RdioScannerLivefeedMode.Online ? this.callQueue.length : this.getPlaybackQueueCount(),
-            });
+            const evt = this.livefeedMode === RdioScannerLivefeedMode.Online
+                ? {
+                    queue: this.callQueue.length,
+                    queueDuration: this.callQueueDuration,
+                  }
+                : {
+                    queue: this.getPlaybackQueueCount(),
+                    queueDuration: this.getPlaybackQueueDuration(),
+                  };
+
+            this.event.emit(evt);
 
         } else {
             this.play();
@@ -670,7 +685,7 @@ export class RdioScannerService implements OnDestroy {
                 this.livefeedMapPriorToHoldTalkgroup = undefined;
             }
 
-            const status = category.status === RdioScannerCategoryStatus.On ? false : true;
+            const status = category.status !== RdioScannerCategoryStatus.On;
 
             this.config?.systems.forEach((sys) => {
                 sys.talkgroups?.forEach((tg) => {
@@ -707,6 +722,7 @@ export class RdioScannerService implements OnDestroy {
                 holdTg: false,
                 map: this.livefeedMap,
                 queue: this.callQueue.length,
+                queueDuration: this.callQueueDuration,
             });
         }
     }
@@ -822,6 +838,14 @@ export class RdioScannerService implements OnDestroy {
         this.sendtoWebsocket(WebsocketCommand.Call, `${id}`, flags);
     }
 
+    private get callQueueDuration(): number {
+      return (
+        this.callQueue
+          .map((call) => call.audioDuration || 0)
+          .reduce((sum, duration) => sum + duration, 0)
+      );
+    }
+
     private getPlaybackQueueCount(id = this.call?.id || this.callPrevious?.id): number {
         let queueCount = 0;
 
@@ -839,6 +863,29 @@ export class RdioScannerService implements OnDestroy {
         }
 
         return queueCount;
+    }
+
+    private getPlaybackQueueDuration(id = this.call?.id || this.callPrevious?.id): number {
+        let queueDuration = 0;
+
+        if (id && this.playbackList) {
+            const index = this.playbackList.results.findIndex((call) => call.id === id);
+
+            if (index !== -1) {
+                if (this.playbackList.options.sort === -1) {
+                    queueDuration = this.playbackList.results.slice(0, index)
+                        .map((call) => call.audioDuration || 0)
+                        .reduce((sum, duration) => sum + duration, 0);
+
+                } else {
+                    queueDuration = this.playbackList.results.slice(index + 1)
+                        .map((call) => call.audioDuration || 0)
+                        .reduce((sum, duration) => sum + duration, 0);
+                }
+            }
+        }
+
+        return queueDuration;
     }
 
     private initializeInstanceId(): void {

@@ -27,6 +27,7 @@ import { RdioScannerSupportComponent } from './main/support/support.component';
 import { RdioScannerSearchComponent } from './search/search.component';
 import { RdioScannerSelectComponent } from './select/select.component';
 import { KeyboardShortcutsModule } from '@egoistdeveloper/ng-keyboard-shortcuts';
+import { DurationModule } from "../../duration.module";
 
 @NgModule({
     declarations: [
@@ -40,6 +41,7 @@ import { KeyboardShortcutsModule } from '@egoistdeveloper/ng-keyboard-shortcuts'
     imports: [
       AppSharedModule,
       KeyboardShortcutsModule.forRoot(),
+      DurationModule,
     ],
     providers: [
         RdioScannerService,

@@ -23,7 +23,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { environment } from '../environments/environment';
 import { AppComponent } from './app.component';
-import { RdioScannerModule } from './components/rdio-scanner/rdio-scanner.module';
+import { RdioScannerModule } from './components/rdio-scanner';
 import { AppSharedModule } from './shared/shared.module';
 import { routes } from './app.routes';
 

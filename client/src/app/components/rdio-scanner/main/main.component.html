@@ -5,7 +5,7 @@
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
-    <div class="row">
+    <div class="row rdio-header">
         <div>
             <span>{{ clock | date:timeFormat }}</span>
         </div>
@@ -15,11 +15,11 @@
         <div *ngIf="linked && showListenersCount">
             <span>L: {{ listeners }}</span>
         </div>
-        <div>
-            <span>Q: {{ callQueue }}</span>
+        <div class="rdio-queue" [ngClass]="{ 'has-calls': callQueue > 0 }">
+          <span class="queue-length">Q: <span class="queue-length-value value">{{ callQueue }}</span></span>
+          <span class="queue-duration">⏲: <span class="queue-duration-value value">{{ callQueueDuration | duration }}s</span></span>
         </div>
     </div>
-    <div class="row small"></div>
     <div class="row">
         <div>
             <span>{{ callSystem }}</span>
@@ -59,13 +59,13 @@
     </div>
     <div class="row right small">
         <div *ngIf="tempAvoid">
-            <span class="flag" [ngClass]="{ flaged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
+            <span class="flag" [ngClass]="{ flagged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
         </div>
         <div>
-            <span class="flag" [ngClass]="{ flaged: avoided }">AVOID</span>
+            <span class="flag" [ngClass]="{ flagged: avoided }">AVOID</span>
         </div>
         <div>
-            <span class="flag" [ngClass]="{ flaged: patched }">PATCH</span>
+            <span class="flag" [ngClass]="{ flagged: patched }">PATCH</span>
         </div>
     </div>
     <div class="wrapper">

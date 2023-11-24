@@ -54,6 +54,35 @@
     white-space: nowrap;
   }
 
+  .rdio-header {
+    font-size: 1.3em;
+    margin-bottom: 20px;
+
+    .rdio-queue {
+      &.has-calls .value {
+        color: rgb(0, 230, 118);
+
+        // Add text outline, for contrast
+        text-shadow:
+          -1px -1px 0 rgba(0, 0, 0, 0.9),
+           1px -1px 0 rgba(0, 0, 0, 0.9),
+          -1px  1px 0 rgba(0, 0, 0, 0.9),
+           1px  1px 0 rgba(0, 0, 0, 0.9);
+      }
+
+      > span {
+        display: inline-block;
+      }
+      .queue-length {
+        margin-right: 10px;
+        min-width: 45px;
+      }
+      .queue-duration {
+        min-width: 80px;
+      }
+    }
+  }
+
   .auth {
     align-items: center;
     display: flex;
@@ -91,7 +120,7 @@
     padding: 0 3px;
   }
 
-  .flaged {
+  .flagged {
     display: block;
   }
 
