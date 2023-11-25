@@ -147,17 +147,17 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             })
             .map((system) => system.label);
 
-        this.optionsTalkgroup = selectedSystem == undefined
-            ? []
-            : selectedSystem.talkgroups
-                .filter((talkgroup) => {
-                    const group = selectedGroup == undefined ||
-                        talkgroup.group === selectedGroup;
-                    const tag = selectedTag == undefined ||
-                        talkgroup.tag === selectedTag;
-                    return group && tag;
-                })
-                .map((talkgroup) => talkgroup.label);
+        const selectedSystems = selectedSystem ? [selectedSystem] : this.config.systems ?? [];
+        this.optionsTalkgroup = selectedSystems
+            .flatMap((sys) => sys.talkgroups)
+            .filter((talkgroup) => {
+                const group = selectedGroup == undefined ||
+                    talkgroup.group === selectedGroup;
+                const tag = selectedTag == undefined ||
+                    talkgroup.tag === selectedTag;
+                return group && tag;
+            })
+            .map((talkgroup) => talkgroup.label);
 
         this.optionsGroup = Object.keys(this.config.groups)
             .filter((group) => {
