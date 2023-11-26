@@ -131,24 +131,24 @@
     <div class="row">
         <button class="rdio-button" (click)="livefeed()"
             [ngClass]="{ off: livefeedOffline && !playbackMode, on: livefeedOnline, partial: playbackMode }">
-            LIVE<br>FEED
+            LIVE FEED
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="holdSystem()" [ngClass]="{ off: !holdSys, on: holdSys }">
-            HOLD<br>SYS
+            HOLD SYS
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="holdTalkgroup()" [ngClass]="{ off: !holdTg, on: holdTg }">
-            HOLD<br>TG
+            HOLD TG
         </button>
     </div>
     <div class="row">
         <button class="rdio-button" (click)="replay()">
-            REPLAY<br>LAST
+            REPLAY LAST
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="skip()">
-            SKIP<br>NEXT
+            SKIP NEXT
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="avoid()">
@@ -157,7 +157,7 @@
     </div>
     <div class="row">
         <button class="rdio-button" (click)="showSearchPanel()">
-            SEARCH<br>CALL
+            SEARCH CALL
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="pause()" [ngClass]="{ off: !livefeedPaused, on: livefeedPaused }">
@@ -166,7 +166,7 @@
         </button>
         <div class="spacer"></div>
         <button class="rdio-button" (click)="showSelectPanel()">
-            SELECT<br>TG
+            SELECT TG
         </button>
     </div>
 </div>
