@@ -106,7 +106,7 @@
             <tbody>
                 <tr *ngFor="let previousCall of callHistory"
                     [ngClass]="{ 'replaying': previousCall?.id !== null && previousCall?.id === call?.id}"
-                    (click)="play(previousCall.id)">
+                    (click)="previousCall && play(previousCall.id)">
                     <td>
                         <span>{{ previousCall?.dateTime | date:timeFormat }}</span>
                     </td>
