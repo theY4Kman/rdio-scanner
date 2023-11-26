@@ -1,22 +1,31 @@
-FROM docker.io/golang:1.18-alpine AS builder
-LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
+FROM node:21.2.0 as client
+WORKDIR /app
+
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+
+COPY client/. ./
+RUN npm run build
+
+
+FROM docker.io/golang:1.18-alpine AS binary
 ENV DOCKER=1
 
 # Download dependencies in early layer, as these rarely change
 COPY server/go.mod server/go.sum /app/server/
-WORKDIR /app/server
-RUN go mod download
+RUN cd /app/server && go mod download
 
 COPY server/. /app/server/.
-RUN go build -o /app/rdio-scanner
+COPY --from=client /app/dist/ /app/server/webapp/
+RUN cd /app/server && go build -o /app/rdio-scanner
+
 
 FROM docker.io/alpine:latest AS app
-LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
-WORKDIR /app
 ENV DOCKER=1
+WORKDIR /app
 RUN apk --no-cache --no-progress add ffmpeg mailcap tzdata
 RUN mkdir -p /app/data
-COPY --from=builder /app/rdio-scanner .
+COPY --from=binary /app/rdio-scanner .
 
 VOLUME [ "/app/data" ]
 EXPOSE 3000
