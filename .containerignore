@@ -1,4 +1,5 @@
 client/.angular/cache
+client/dist
 client/node_modules
 server/*.db
 server/*.crt
@@ -8,3 +9,4 @@ server/*.ini
 server/*.sqlite
 server/__debug_bin
 server/server
+server/webapp

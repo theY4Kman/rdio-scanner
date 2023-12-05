@@ -16,7 +16,7 @@ COPY server/go.mod server/go.sum /app/server/
 RUN cd /app/server && go mod download
 
 COPY server/. /app/server/.
-COPY --from=client /app/dist/ /app/server/webapp/
+COPY --from=client /server/webapp/ /app/server/webapp/
 RUN cd /app/server && go build -o /app/rdio-scanner
 
 
