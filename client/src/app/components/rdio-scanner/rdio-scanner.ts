@@ -73,6 +73,7 @@ export interface RdioScannerCallFrequency {
 export interface RdioScannerCallSource {
     pos?: number;
     src?: number;
+    label?: string;
 }
 
 export interface RdioScannerCategory {
@@ -126,6 +127,7 @@ export interface RdioScannerEvent {
     queueDuration?: number;
     time?: number;
     tooMany?: boolean;
+    unitsIndex?: RdioScannerUnitsIndex;
 }
 
 export interface RdioScannerKeypadBeeps {
@@ -158,6 +160,12 @@ export interface RdioScannerPlaybackList {
     dateStop: Date;
     options: RdioScannerSearchOptions;
     results: RdioScannerCall[];
+}
+
+export interface RdioScannerUnitsIndex {
+    [systemId: number]: {
+        [unitId: number]: string;
+    };
 }
 
 export interface RdioScannerSearchOptions {

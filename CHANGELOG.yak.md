@@ -12,6 +12,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Show call queue/playback list total duration while paused
 - Show elapsed timer on pause button
 - Expand playback history to 30 max calls, constrained by screen height
+- Propagate changes to units config to main display
 - (dev) Allow configuration of dev server API proxy URL with `API_URL` env var
 
 ### Removed

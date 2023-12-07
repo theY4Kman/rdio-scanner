@@ -27,6 +27,7 @@ import {
     RdioScannerAvoidOptions,
     RdioScannerBeepStyle,
     RdioScannerCall,
+    RdioScannerCallSource,
     RdioScannerCategory,
     RdioScannerCategoryStatus,
     RdioScannerCategoryType,
@@ -37,6 +38,7 @@ import {
     RdioScannerLivefeedMode,
     RdioScannerPlaybackList,
     RdioScannerSearchOptions,
+    RdioScannerUnitsIndex,
 } from './rdio-scanner';
 
 declare global {
@@ -94,6 +96,9 @@ export class RdioScannerService implements OnDestroy {
         tagsToggle: false,
         time12hFormat: false,
     };
+
+    /** Map unit IDs to labels for each system ID, e.g. `unitsIndex[sysId][unitId]` */
+    private unitsIndex = {} as RdioScannerUnitsIndex;
 
     private instanceId = 'default';
 
@@ -976,6 +981,7 @@ export class RdioScannerService implements OnDestroy {
                     }
 
                     this.rebuildLivefeedMap();
+                    this.rebuildUnitsIndex();
 
                     if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
                         this.startLivefeed();
@@ -988,6 +994,7 @@ export class RdioScannerService implements OnDestroy {
                         holdSys: !!this.livefeedMapPriorToHoldSystem,
                         holdTg: !!this.livefeedMapPriorToHoldTalkgroup,
                         map: this.livefeedMap,
+                        unitsIndex: this.unitsIndex,
                     });
 
                     break;
@@ -1206,6 +1213,17 @@ export class RdioScannerService implements OnDestroy {
         this.rebuildCategories();
     }
 
+    private rebuildUnitsIndex(): void {
+        this.unitsIndex = this.config.systems.reduce((unitsIndex, sys) => {
+            if (!unitsIndex[sys.id]) unitsIndex[sys.id] = {};
+
+            sys.units.forEach((unit) => {
+                unitsIndex[sys.id][unit.id] = unit.label;
+            });
+            return unitsIndex;
+        }, {} as typeof this.unitsIndex);
+    }
+
     private reconnectWebsocket(): void {
         this.closeWebsocket();
 
@@ -1252,6 +1270,16 @@ export class RdioScannerService implements OnDestroy {
             if (call.talkgroupData?.frequency) {
                 call.frequency = call.talkgroupData.frequency;
             }
+
+           if (Array.isArray(call.sources)) {
+               const sysUnits = this.unitsIndex[call.system] ?? {};
+               call.sources = call.sources.map((source: RdioScannerCallSource) => {
+                   if (source.src != null) {
+                       source.label = sysUnits[source.src];
+                   }
+                   return source;
+               });
+           }
         }
 
         return call;

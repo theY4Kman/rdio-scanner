@@ -17,7 +17,17 @@
  * ****************************************************************************
  */
 
-import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import {
+    AfterViewInit,
+    ChangeDetectorRef,
+    Component,
+    EventEmitter,
+    Input,
+    OnDestroy,
+    OnInit,
+    Output,
+    ViewChild
+} from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
@@ -32,6 +42,7 @@ import {
     RdioScannerEvent,
     RdioScannerLivefeedMap,
     RdioScannerLivefeedMode,
+    RdioScannerUnitsIndex,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 
@@ -87,7 +98,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     livefeedOnline = false;
     livefeedPaused = false;
     livefeedPausedAt: Date | undefined;
-    livefeedPausedSeconds: number = 0;
+    livefeedPausedSeconds = 0;
 
     /**
      * Returns the duration the live feed has been paused, in seconds.
@@ -136,6 +147,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     private config: RdioScannerConfig | undefined;
 
     private dimmerTimer: Subscription | undefined;
+
+    private unitsIndex: RdioScannerUnitsIndex | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
@@ -465,6 +478,12 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             }
         }
 
+        if ('unitsIndex' in event) {
+            this.unitsIndex = event.unitsIndex;
+
+            this.propagateUnitLabels();
+        }
+
         if ('expired' in event && event.expired === true) {
             this.authForm.get('password')?.setErrors({ expired: true });
         }
@@ -552,6 +571,24 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         }
 
         return this.config.afs.split(',').includes(talkgroupId.toString());
+    }
+
+    /**
+     * Propagate changes to unit labels to calls in history
+     */
+    private propagateUnitLabels(): void {
+        if (this.call) this._propagateUnitLabelsInCall(this.call)
+        this.callHistory.forEach(this._propagateUnitLabelsInCall.bind(this));
+    }
+
+    private _propagateUnitLabelsInCall(call: RdioScannerCall): void {
+        if (!call || !Array.isArray(call.sources)) return;
+
+        call.sources.forEach((source) => {
+            if (typeof source.src !== 'number') return;
+
+            source.label = this.unitsIndex?.[call.system]?.[source.src] ?? `${source.src}`;
+        });
     }
 
     private syncClock(): void {
@@ -643,8 +680,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
                 this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
-                if (typeof source.src === 'number' && Array.isArray(this.call.systemData?.units)) {
-                    this.callUnit = this.call.systemData?.units?.find((u) => u.id === source.src)?.label ?? `${source.src}`;
+                if (typeof source.src === 'number' && this.unitsIndex != null) {
+                    // this.callUnit = this.call.systemData?.units?.find((u) => u.id === source.src)?.label ?? `${source.src}`;
+                    this.callUnit = this.unitsIndex[this.call.system]?.[source.src] ?? `${source.src}`;
 
                 } else {
                     this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
