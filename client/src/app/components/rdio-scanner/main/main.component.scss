@@ -1,3 +1,12 @@
+$led-blue: rgb(41, 121, 255);
+$led-cyan: rgb(0, 229, 255);
+$led-green: rgb(0, 230, 118);
+$led-magenta: rgb(213, 0, 249);
+$led-orange: rgb(255, 145, 0);
+$led-red: rgb(255, 23, 68);
+$led-white: rgb(255, 255, 255);
+$led-yellow: rgb(255, 234, 0);
+
 :host {
   box-sizing: border-box;
   display: block;
@@ -27,7 +36,7 @@
   }
 
   .paused-elapsed-timer {
-    color: rgb(0, 230, 118);
+    color: $led-green;
   }
 }
 
@@ -64,7 +73,7 @@
 
     .rdio-queue {
       &.has-calls .value {
-        color: rgb(0, 230, 118);
+        color: $led-green;
 
         // Add text outline, for contrast
         text-shadow:
@@ -195,7 +204,26 @@
       height: 21px;
 
       &.replaying {
+        $replaying-row: &;
+
         font-weight: 700;
+
+        > :first-child::before {
+          content: '⬤';
+          position: absolute;
+          left: -8px;
+
+          @at-root {
+            #{$replaying-row}.led-blue > :first-child::before { color: $led-blue; }
+            #{$replaying-row}.led-cyan > :first-child::before { color: $led-cyan; }
+            #{$replaying-row}.led-green > :first-child::before { color: $led-green; }
+            #{$replaying-row}.led-magenta > :first-child::before { color: $led-magenta; }
+            #{$replaying-row}.led-orange > :first-child::before { color: $led-orange; }
+            #{$replaying-row}.led-red > :first-child::before { color: $led-red; }
+            #{$replaying-row}.led-white > :first-child::before { color: $led-white; }
+            #{$replaying-row}.led-yellow > :first-child::before { color: $led-yellow; }
+          }
+        }
       }
     }
 
@@ -233,47 +261,47 @@
     width: 24px;
 
     &.on {
-      background: rgb(0, 230, 118);
-      box-shadow: 0 0 6px 3px rgb(0, 230, 118);
+      background: $led-green;
+      box-shadow: 0 0 6px 3px $led-green;
 
       &.blue {
-        background: rgb(41, 121, 255);
-        box-shadow: 0 0 6px 3px rgb(41, 121, 255);
+        background: $led-blue;
+        box-shadow: 0 0 6px 3px $led-blue;
       }
 
       &.cyan {
-        background: rgb(0, 229, 255);
-        box-shadow: 0 0 6px 3px rgb(0, 229, 255);
+        background: $led-cyan;
+        box-shadow: 0 0 6px 3px $led-cyan;
       }
 
       &.green {
-        background: rgb(0, 230, 118);
-        box-shadow: 0 0 6px 3px rgb(0, 230, 118);
+        background: $led-green;
+        box-shadow: 0 0 6px 3px $led-green;
       }
 
       &.magenta {
-        background: rgb(213, 0, 249);
-        box-shadow: 0 0 6px 3px rgb(213, 0, 249);
+        background: $led-magenta;
+        box-shadow: 0 0 6px 3px $led-magenta;
       }
 
       &.orange {
-        background: rgb(255, 145, 0);
-        box-shadow: 0 0 6px 3px rgb(255, 145, 0);
+        background: $led-orange;
+        box-shadow: 0 0 6px 3px $led-orange;
       }
 
       &.red {
-        background: rgb(255, 23, 68);
-        box-shadow: 0 0 6px 3px rgb(255, 23, 68);
+        background: $led-red;
+        box-shadow: 0 0 6px 3px $led-red;
       }
 
       &.white {
-        background: rgb(255, 255, 255);
-        box-shadow: 0 0 6px 3px rgb(255, 255, 255);
+        background: $led-white;
+        box-shadow: 0 0 6px 3px $led-white;
       }
 
       &.yellow {
-        background: rgb(255, 234, 0);
-        box-shadow: 0 0 6px 3px rgb(255, 234, 0);
+        background: $led-yellow;
+        box-shadow: 0 0 6px 3px $led-yellow;
       }
     }
 
