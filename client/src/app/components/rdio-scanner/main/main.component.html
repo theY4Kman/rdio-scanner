@@ -92,14 +92,14 @@
                     <th class="duration">
                         <span>⏲</span>
                     </th>
-                    <th>
+                    <th class="system">
                         <span>System</span>
                     </th>
-                    <th>
+                    <th class="talkgroup">
                         <span>Talkgroup</span>
                     </th>
-                    <th>
-                        <span>Name</span>
+                    <th class="unit">
+                        <span>Units</span>
                     </th>
                 </tr>
             </thead>
@@ -108,20 +108,20 @@
                     [ngClass]="{ 'replaying': previousCall?.id != null && previousCall?.id === call?.id }"
                     [class]="'led-' + (previousCall?.id != null && previousCall?.id === call?.id && previousCall.talkgroupData?.led ? previousCall.talkgroupData?.led ?? previousCall.systemData?.led : 'green')"
                     (click)="previousCall && play(previousCall.id)">
-                    <td>
+                    <td class="time">
                         <span>{{ previousCall?.dateTime | date:timeFormat }}</span>
                     </td>
                     <td class="duration">
-                        <span *ngIf="previousCall">{{ previousCall.audioDuration | number:'1.0-1' }}s</span>
+                        <span *ngIf="previousCall">{{ previousCall.audioDuration | duration }}s</span>
                     </td>
-                    <td>
+                    <td class="system">
                         <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>
                     </td>
-                    <td>
+                    <td class="talkgroup">
                         <span>{{ previousCall?.talkgroupData?.label || previousCall?.talkgroup }}</span>
                     </td>
-                    <td>
-                        <span>{{ previousCall?.talkgroupData?.name || previousCall?.frequency }}</span>
+                    <td class="unit">
+                        <span *ngIf="previousCall">({{ previousCall.sources?.length ?? '?' }}) {{ formatUnitLabels(previousCall) }}</span>
                     </td>
                 </tr>
             </tbody>

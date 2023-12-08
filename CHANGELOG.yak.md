@@ -14,6 +14,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Expand playback history to 30 max calls, constrained by screen height
 - Propagate changes to units config to main display
 - Show visual indicator when replaying call from history, using the TG's/system's LED color
+- Show summary of units involved in each call in playback history (no display for current call, yet)
 - (dev) Allow configuration of dev server API proxy URL with `API_URL` env var
 
 ### Removed

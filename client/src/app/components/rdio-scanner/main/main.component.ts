@@ -565,6 +565,20 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             .concat(' Hz') : '';
     }
 
+    formatUnitLabels(call: RdioScannerCall): string {
+        if (!call) return '';
+
+        if (Array.isArray(call.sources)) {
+            return call.sources.map(({ label }) => label).join(', ');
+        }
+
+        if (typeof call.source === 'number') {
+            return this.unitsIndex?.[call.system]?.[call.source] ?? `${call.source}`;
+        }
+
+        return '';
+    }
+
     private isAfsSystem(talkgroupId: number): boolean {
         if (typeof this.config?.afs !== 'string') {
             return false;

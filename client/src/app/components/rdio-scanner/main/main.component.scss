@@ -177,20 +177,22 @@ $led-yellow: rgb(255, 234, 0);
       padding: 0 6px;
       text-align: start;
 
-      &:nth-child(1) {
+      &.time,
+      &.duration {
         width: 10%;
       }
 
-      &:nth-child(2) {
+      &.system {
+        width: 15%;
+      }
+
+      &.talkgroup {
         width: 25%;
       }
 
-      &:nth-child(3) {
-        width: 25%;
-      }
-
-      &:nth-child(4) {
+      &.unit {
         width: 40%;
+        text-overflow: ellipsis;
       }
     }
 
