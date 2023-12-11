@@ -27,6 +27,10 @@ import { RdioScannerSearchComponent } from './search/search.component';
 import { RdioScannerSelectComponent } from './select/select.component';
 import { KeyboardShortcutsModule } from '@egoistdeveloper/ng-keyboard-shortcuts';
 import { DurationModule } from "../../duration.module";
+import { RdioScannerAdminService } from './admin/admin.service';
+import { RdioScannerAdminModule } from './admin';
+import { A11yModule } from '@angular/cdk/a11y';
+import { RdioScannerCallSourceComponent } from './main/call-source/rdio-scanner-call-source.component';
 
 @NgModule({
     declarations: [
@@ -34,16 +38,20 @@ import { DurationModule } from "../../duration.module";
         RdioScannerMainComponent,
         RdioScannerSearchComponent,
         RdioScannerSelectComponent,
+        RdioScannerCallSourceComponent,
     ],
     exports: [RdioScannerComponent],
     imports: [
-      AppSharedModule,
-      KeyboardShortcutsModule.forRoot(),
-      DurationModule,
+        AppSharedModule,
+        KeyboardShortcutsModule.forRoot(),
+        DurationModule,
+        RdioScannerAdminModule,
+        A11yModule,
     ],
     providers: [
         RdioScannerService,
-        { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
+        {provide: OverlayContainer, useClass: FullscreenOverlayContainer},
     ],
 })
-export class RdioScannerModule { }
+export class RdioScannerModule {
+}

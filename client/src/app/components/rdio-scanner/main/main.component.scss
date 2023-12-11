@@ -96,7 +96,8 @@ $led-yellow: rgb(255, 234, 0);
     }
   }
 
-  .auth {
+  .auth,
+  .admin-auth {
     align-items: center;
     display: flex;
     flex-direction: row;
@@ -112,7 +113,7 @@ $led-yellow: rgb(255, 234, 0);
       visibility: visible;
     }
 
-    > form {
+    form {
       background: rgb(240, 240, 240);
       border-radius: 8px;
       padding: 8px 32px;
@@ -120,6 +121,14 @@ $led-yellow: rgb(255, 234, 0);
       input {
         text-align: center;
       }
+    }
+  }
+
+  .configure-source {
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
     }
   }
 

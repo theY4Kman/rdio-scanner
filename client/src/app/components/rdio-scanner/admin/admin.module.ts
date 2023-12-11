@@ -43,6 +43,7 @@ import { RdioScannerAdminImportExportConfigComponent } from './tools/import-expo
 import { RdioScannerAdminImportTalkgroupsComponent } from './tools/import-talkgroups/import-talkgroups.component';
 import { RdioScannerAdminImportUnitsComponent } from './tools/import-units/import-units.component';
 import { RdioScannerAdminPasswordComponent } from './tools/password/password.component';
+import { A11yModule } from '@angular/cdk/a11y';
 
 @NgModule({
     declarations: [
@@ -70,8 +71,11 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminUnitComponent,
     ],
     entryComponents: [RdioScannerAdminSystemsSelectComponent],
-    exports: [RdioScannerAdminComponent],
-    imports: [AppSharedModule, HttpClientModule],
+    exports: [
+        RdioScannerAdminComponent,
+        RdioScannerAdminLoginComponent,
+    ],
+    imports: [AppSharedModule, HttpClientModule, A11yModule],
     providers: [RdioScannerAdminService],
 })
 export class RdioScannerAdminModule { }

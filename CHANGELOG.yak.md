@@ -15,6 +15,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Propagate changes to units config to main display
 - Show visual indicator when replaying call from history, using the TG's/system's LED color
 - Show summary of units involved in each call in playback history (no display for current call, yet)
+- Allow unit labels to be configured directly on main display
 - (dev) Allow configuration of dev server API proxy URL with `API_URL` env var
 
 ### Removed

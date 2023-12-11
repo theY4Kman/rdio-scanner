@@ -23,6 +23,7 @@ import { AbstractControl, FormBuilder, FormGroup, ValidationErrors, ValidatorFn,
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom, timer } from 'rxjs';
 import { AppUpdateService } from '../../../shared/update/update.service';
+import { WebSocketCloseCode } from '../../../websocket';
 
 export interface Access {
     _id?: string;
@@ -542,7 +543,7 @@ export class RdioScannerAdminService implements OnDestroy {
         this.configWebSocket = new WebSocket(webSocketUrl);
 
         this.configWebSocket.onclose = (ev: CloseEvent) => {
-            if (ev.code === 1000) {
+            if (ev.code === WebSocketCloseCode.CLOSE_NORMAL) {
                 this.token = '';
 
                 this.event.emit({ authenticated: this.authenticated });

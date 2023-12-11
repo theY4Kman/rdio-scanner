@@ -37,7 +37,7 @@ import packageInfo from '../../../../../package.json';
 import {
     RdioScannerAvoidOptions,
     RdioScannerBeepStyle,
-    RdioScannerCall,
+    RdioScannerCall, RdioScannerCallSource,
     RdioScannerConfig,
     RdioScannerEvent,
     RdioScannerLivefeedMap,
@@ -45,6 +45,7 @@ import {
     RdioScannerUnitsIndex,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
+import { RdioScannerAdminService } from '../admin/admin.service';
 
 @Component({
     selector: 'rdio-scanner-main',
@@ -72,6 +73,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     callDuration = 0;
     callQueue = 0;
     callQueueDuration = 0;
+    callSource: RdioScannerCallSource | undefined;
     callSpike = '0';
     callSystem = 'System';
     callTag = 'Tag';
@@ -148,7 +150,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
     private dimmerTimer: Subscription | undefined;
 
-    private unitsIndex: RdioScannerUnitsIndex | undefined;
+    unitsIndex: RdioScannerUnitsIndex | undefined;
+    unitLabelForm = this.ngFormBuilder.group({ label: [] });
+    isConfiguringUnitLabel = false;
+    configureUnitLabelSystem: number = 1;
+    configureUnitLabelSource: RdioScannerCallSource | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
@@ -157,7 +163,12 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         private matSnackBar: MatSnackBar,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
+        private adminService: RdioScannerAdminService,
     ) { }
+
+    get isAdminAuthenticated(): boolean {
+        return this.adminService.authenticated;
+    }
 
     ngAfterViewInit(): void {
         this.shortcuts.push(
@@ -216,6 +227,15 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 description: 'Open talkgroup/systems select panel',
                 command: () => this.showSelectPanel(),
             },
+            {
+                key: 'escape',
+                label: 'Close prompts/modals',
+                description: 'Close any open prompts or modals',
+                command: () => {
+                    this.auth = false;
+                    this.isConfiguringUnitLabel = false;
+                },
+            }
         );
     }
 
@@ -579,12 +599,63 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         return '';
     }
 
+    calcNumUniqueSources(call: RdioScannerCall): number {
+        if (!call) return 0;
+
+        if (Array.isArray(call.sources)) {
+            const uniqueUnitIds = new Set(call.sources.map(({ src }) => src ?? -1));
+            return uniqueUnitIds.size;
+        }
+
+        if (typeof call.source === 'number') {
+            return 1;
+        }
+
+        return 0;
+    }
+
     private isAfsSystem(talkgroupId: number): boolean {
         if (typeof this.config?.afs !== 'string') {
             return false;
         }
 
         return this.config.afs.split(',').includes(talkgroupId.toString());
+    }
+
+    configureSource(system: number, source: RdioScannerCallSource): void {
+        this.isConfiguringUnitLabel = true;
+        this.configureUnitLabelSystem = system;
+        this.configureUnitLabelSource = source;
+        this.unitLabelForm.get('label')?.setValue(source.label ?? '');
+    }
+
+    async submitUnitLabelConfiguration(): Promise<void> {
+        if (this.unitLabelForm.invalid) return;
+
+        const label = this.unitLabelForm.get('label')?.value;
+
+        if (typeof label !== 'string' || label === '' || label === this.configureUnitLabelSource?.label) return;
+
+        const config = await this.adminService.getConfig();
+
+        const system = config.systems?.find((s) => s.id === this.configureUnitLabelSystem);
+        if (!system) return;
+
+        const unitId = this.configureUnitLabelSource?.src;
+        const unit = system.units?.find((u) => u.id === unitId);
+
+        if (unit) {
+            unit.label = label;
+        } else {
+            if (!system.units) {
+                system.units = [];
+            }
+            system.units.push({ id: unitId, label, order: system.units.length });
+        }
+
+        await this.adminService.saveConfig(config);
+
+        this.isConfiguringUnitLabel = false;
     }
 
     /**
@@ -601,7 +672,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         call.sources.forEach((source) => {
             if (typeof source.src !== 'number') return;
 
-            source.label = this.unitsIndex?.[call.system]?.[source.src] ?? `${source.src}`;
+            source.label = this.unitsIndex?.[call.system]?.[source.src];
         });
     }
 
@@ -691,11 +762,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
             if (Array.isArray(this.call.sources) && this.call.sources.length) {
                 const source = this.call.sources.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
+                this.callSource = source;
 
                 this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
                 if (typeof source.src === 'number' && this.unitsIndex != null) {
-                    // this.callUnit = this.call.systemData?.units?.find((u) => u.id === source.src)?.label ?? `${source.src}`;
                     this.callUnit = this.unitsIndex[this.call.system]?.[source.src] ?? `${source.src}`;
 
                 } else {
@@ -706,6 +777,21 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
                 this.callUnit = this.call.systemData?.units?.find((u) => u.id === this.call?.source)?.label ?? `${this.call.source ?? ''}`;
+
+                if (typeof this.call.source === 'number') {
+                    this.callSource = { src: this.call.source };
+
+                    const label = this.unitsIndex?.[this.call.system]?.[this.call.source];
+                    if (label) {
+                        this.callSource.label = label;
+                        this.callUnit = label;
+                    } else {
+                        this.callUnit = `${this.call.source}`;
+                    }
+                } else {
+                    this.callSource = undefined;
+                    this.callUnit = '?';
+                }
             }
 
             if (

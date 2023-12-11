@@ -54,7 +54,7 @@
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
-            <span *ngIf="callUnit">UID: {{ callUnit }}</span>
+          <span *ngIf="callUnit">UID: <rdio-scanner-call-source [call]="call" [source]="callSource" (edit)="configureSource($event.system, $event.source)"></rdio-scanner-call-source></span>
         </div>
     </div>
     <div class="row right small">
@@ -80,6 +80,29 @@
                     <mat-error *ngIf="authForm.get('password')?.hasError('tooMany')">
                         Too many connections
                     </mat-error>
+                </mat-form-field>
+            </form>
+        </div>
+        <div class="admin-auth" [ngClass]="{ visible: isConfiguringUnitLabel }">
+            <ng-container *ngIf="!isAdminAuthenticated">
+                <rdio-scanner-admin-login class="modal" [focused]="true" (blur)="this.isConfiguringUnitLabel = false">
+                    Enter admin password to configure unit label
+                </rdio-scanner-admin-login>
+            </ng-container>
+            <form *ngIf="isAdminAuthenticated" class="mat-elevation-z8" autocomplete="off" [formGroup]="unitLabelForm" (ngSubmit)="submitUnitLabelConfiguration()">
+                <mat-form-field>
+                    <input
+                        #label
+                        matInput
+                        autocomplete="off"
+                        formControlName="label"
+                        placeholder="Unit label"
+                        (blur)="this.isConfiguringUnitLabel = false"
+                        (keyup)="this.isConfiguringUnitLabel = $event.key === 'Escape'"
+                        onfocus="this.select()"
+                        [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel"
+                        [cdkTrapFocus]="isConfiguringUnitLabel"
+                    >
                 </mat-form-field>
             </form>
         </div>
@@ -121,7 +144,15 @@
                         <span>{{ previousCall?.talkgroupData?.label || previousCall?.talkgroup }}</span>
                     </td>
                     <td class="unit">
-                        <span *ngIf="previousCall">({{ previousCall.sources?.length ?? '?' }}) {{ formatUnitLabels(previousCall) }}</span>
+                        <span *ngIf="previousCall">
+                            <span>({{ calcNumUniqueSources(previousCall) }}) </span>
+                            <span *ngIf="previousCall.sources?.length">
+                                <span *ngFor="let source of previousCall.sources; first as isFirst">
+                                    <span *ngIf="!isFirst">, </span>
+                                    <rdio-scanner-call-source [call]="previousCall" [source]="source" (edit)="configureSource($event.system, $event.source)"></rdio-scanner-call-source>
+                                </span>
+                            </span>
+                        </span>
                     </td>
                 </tr>
             </tbody>

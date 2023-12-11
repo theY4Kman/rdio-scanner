@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { RdioScannerAdminService } from '../admin.service';
 
@@ -27,6 +27,8 @@ import { RdioScannerAdminService } from '../admin.service';
     templateUrl: './login.component.html',
 })
 export class RdioScannerAdminLoginComponent {
+    @Input() focused = false;
+
     @Output() loggedIn = new EventEmitter<void>();
 
     form = this.formBuilder.group({

@@ -1275,7 +1275,7 @@ export class RdioScannerService implements OnDestroy {
                const sysUnits = this.unitsIndex[call.system] ?? {};
                call.sources = call.sources.map((source: RdioScannerCallSource) => {
                    if (source.src != null) {
-                       source.label = sysUnits[source.src] ?? `${source.src}`;
+                       source.label = sysUnits[source.src];
                    }
                    return source;
                });
