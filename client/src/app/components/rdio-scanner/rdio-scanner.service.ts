@@ -479,8 +479,9 @@ export class RdioScannerService implements OnDestroy {
     play(call?: RdioScannerCall | undefined): void {
         if (this.livefeedPaused || this.skipDelay) {
             return;
+        }
 
-        } else if (call?.audio) {
+        if (call?.audio) {
             if (this.call) {
                 this.stop({ emit: false });
             }
@@ -982,6 +983,7 @@ export class RdioScannerService implements OnDestroy {
 
                     this.rebuildLivefeedMap();
                     this.rebuildUnitsIndex();
+                    this.propagateUnitLabels();
 
                     if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
                         this.startLivefeed();
@@ -1222,6 +1224,30 @@ export class RdioScannerService implements OnDestroy {
             });
             return unitsIndex;
         }, {} as typeof this.unitsIndex);
+    }
+
+    public propagateUnitLabels(calls: Iterable<RdioScannerCall> = this.iterManagedCalls()): void {
+        for (let call of calls) {
+            this.propagateUnitLabelsInCall(call);
+        }
+    }
+
+    public propagateUnitLabelsInCall(call: RdioScannerCall): void {
+        if (!call || !Array.isArray(call.sources)) return;
+
+        call.sources.forEach((source) => {
+            if (typeof source.src !== 'number') return;
+
+            source.label = this.unitsIndex?.[call.system]?.[source.src];
+        });
+    }
+
+    private *iterManagedCalls(): Generator<RdioScannerCall> {
+        if (this.call) yield this.call;
+        if (this.callPrevious) yield this.callPrevious;
+        for (const call of this.callQueue) {
+            if (call) yield call;
+        }
     }
 
     private reconnectWebsocket(): void {

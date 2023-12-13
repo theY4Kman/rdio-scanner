@@ -599,6 +599,12 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         return '';
     }
 
+    formatCallSourceId(source?: RdioScannerCallSource): string {
+        if (!source || !source.src) return 'Ø';
+
+        return source.src.toString(16).toUpperCase();
+    }
+
     calcNumUniqueSources(call: RdioScannerCall): number {
         if (!call) return 0;
 
@@ -629,17 +635,23 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.unitLabelForm.get('label')?.setValue(source.label ?? '');
     }
 
-    async submitUnitLabelConfiguration(): Promise<void> {
-        if (this.unitLabelForm.invalid) return;
+    async submitUnitLabelConfiguration(): Promise<boolean> {
+        if (this.unitLabelForm.invalid) {
+            return false;
+        }
 
         const label = this.unitLabelForm.get('label')?.value;
 
-        if (typeof label !== 'string' || label === '' || label === this.configureUnitLabelSource?.label) return;
+        if (typeof label !== 'string' || label === '' || label === this.configureUnitLabelSource?.label) {
+            return true;
+        }
 
         const config = await this.adminService.getConfig();
 
         const system = config.systems?.find((s) => s.id === this.configureUnitLabelSystem);
-        if (!system) return;
+        if (!system) {
+            return true;
+        }
 
         const unitId = this.configureUnitLabelSource?.src;
         const unit = system.units?.find((u) => u.id === unitId);
@@ -655,25 +667,22 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
         await this.adminService.saveConfig(config);
 
-        this.isConfiguringUnitLabel = false;
+        return true;
     }
 
     /**
      * Propagate changes to unit labels to calls in history
      */
     private propagateUnitLabels(): void {
-        if (this.call) this._propagateUnitLabelsInCall(this.call)
-        this.callHistory.forEach(this._propagateUnitLabelsInCall.bind(this));
+        this.rdioScannerService.propagateUnitLabels(this.iterManagedCalls());
     }
 
-    private _propagateUnitLabelsInCall(call: RdioScannerCall): void {
-        if (!call || !Array.isArray(call.sources)) return;
-
-        call.sources.forEach((source) => {
-            if (typeof source.src !== 'number') return;
-
-            source.label = this.unitsIndex?.[call.system]?.[source.src];
-        });
+    private *iterManagedCalls(): Generator<RdioScannerCall> {
+        if (this.call) yield this.call;
+        if (this.callPrevious) yield this.callPrevious;
+        for (const call of this.callHistory) {
+            if (call) yield call;
+        }
     }
 
     private syncClock(): void {

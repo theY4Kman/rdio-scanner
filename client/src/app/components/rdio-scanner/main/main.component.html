@@ -89,16 +89,21 @@
                     Enter admin password to configure unit label
                 </rdio-scanner-admin-login>
             </ng-container>
-            <form *ngIf="isAdminAuthenticated" class="mat-elevation-z8" autocomplete="off" [formGroup]="unitLabelForm" (ngSubmit)="submitUnitLabelConfiguration()">
+            <form
+                *ngIf="isAdminAuthenticated"
+                class="mat-elevation-z8"
+                autocomplete="off"
+                [formGroup]="unitLabelForm"
+                (ngSubmit)="this.isConfiguringUnitLabel = !submitUnitLabelConfiguration()"
+            >
                 <mat-form-field>
                     <input
                         #label
                         matInput
                         autocomplete="off"
                         formControlName="label"
-                        placeholder="Unit label"
+                        [placeholder]="'Unit label: ' + formatCallSourceId(configureUnitLabelSource)"
                         (blur)="this.isConfiguringUnitLabel = false"
-                        (keyup)="this.isConfiguringUnitLabel = $event.key === 'Escape'"
                         onfocus="this.select()"
                         [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel"
                         [cdkTrapFocus]="isConfiguringUnitLabel"
