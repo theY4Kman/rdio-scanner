@@ -279,13 +279,13 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 						switch v := v["len"].(type) {
 						case float64:
 							if v >= 0 {
-								freq["len"] = uint(v)
+								freq["len"] = v
 							}
 						}
 						switch v := v["pos"].(type) {
 						case float64:
 							if v >= 0 {
-								freq["pos"] = uint(v)
+								freq["pos"] = v
 							}
 						}
 						switch v := v["spikeCount"].(type) {
@@ -347,7 +347,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 						switch v := v["pos"].(type) {
 						case float64:
 							if v >= 0 {
-								src["pos"] = uint(v)
+								src["pos"] = v
 							}
 						}
 						switch s := v["src"].(type) {

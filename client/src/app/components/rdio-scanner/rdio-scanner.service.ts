@@ -527,7 +527,7 @@ export class RdioScannerService implements OnDestroy {
 
             this.event.emit({ call: this.call, queue, queueDuration });
 
-            interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
+            interval(100).pipe(takeWhile(() => !!this.call)).subscribe(() => {
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
                     if (isNaN(this.audioSourceStartTime)) {
                         this.audioSourceStartTime = this.audioContext.currentTime;
