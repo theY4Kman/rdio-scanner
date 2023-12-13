@@ -61,7 +61,7 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     optionsGroup: string[] = [];
     optionsSystem: string[] = [];
     optionsTag: string[] = [];
-    optionsTalkgroup: string[] = [];
+    optionsTalkgroup: [RdioScannerSystem, string][] = [];
 
     paused = false;
 
@@ -134,8 +134,9 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
 
         const selectedGroup = this.getSelectedGroup();
         const selectedSystem = this.getSelectedSystem();
+        const selectedSystems = selectedSystem ? [selectedSystem] : this.config.systems ?? [];
         const selectedTag = this.getSelectedTag();
-        const selectedTalkgroup = this.getSelectedTalkgroup();
+        const [selectedTalkgroupSystem, selectedTalkgroup] = this.getSelectedTalkgroup();
 
         this.optionsSystem = this.config.systems
             .filter((system) => {
@@ -147,17 +148,18 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             })
             .map((system) => system.label);
 
-        const selectedSystems = selectedSystem ? [selectedSystem] : this.config.systems ?? [];
         this.optionsTalkgroup = selectedSystems
-            .flatMap((sys) => sys.talkgroups)
-            .filter((talkgroup) => {
+            .flatMap((sys) =>
+                sys.talkgroups.map((talkgroup) => [sys, talkgroup] as [RdioScannerSystem, RdioScannerTalkgroup])
+            )
+            .filter(([_system, talkgroup]) => {
                 const group = selectedGroup == undefined ||
                     talkgroup.group === selectedGroup;
                 const tag = selectedTag == undefined ||
                     talkgroup.tag === selectedTag;
                 return group && tag;
             })
-            .map((talkgroup) => talkgroup.label);
+            .map(([system, talkgroup]) => [system, talkgroup.label]);
 
         this.optionsGroup = Object.keys(this.config.groups)
             .filter((group) => {
@@ -190,10 +192,20 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             .sort((a, b) => a.localeCompare(b))
 
         this.form.patchValue({
-            group: selectedGroup ? this.optionsGroup.findIndex((group) => group === selectedGroup) : -1,
-            system: selectedSystem ? this.optionsSystem.findIndex((system) => system === selectedSystem.label) : -1,
-            tag: selectedTag ? this.optionsTag.findIndex((tag) => tag === selectedTag) : -1,
-            talkgroup: selectedTalkgroup ? this.optionsTalkgroup.findIndex((talkgroup) => talkgroup === selectedTalkgroup.label) : -1,
+            group: selectedGroup
+                ? this.optionsGroup.findIndex((group) => group === selectedGroup)
+                : -1,
+            system: selectedSystem
+                ? this.optionsSystem.findIndex((system) => system === selectedSystem.label)
+                : -1,
+            tag: selectedTag
+                ? this.optionsTag.findIndex((tag) => tag === selectedTag)
+                : -1,
+            talkgroup: selectedTalkgroup
+                ? this.optionsTalkgroup.findIndex(([system, talkgroup]) => (
+                    talkgroup === selectedTalkgroup.label && selectedSystems.find((sys) => sys.id === system.id)
+                ))
+                : -1,
         });
     }
 
@@ -281,10 +293,14 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         }
 
         if (this.form.value.talkgroup >= 0) {
-            const talkgroup = this.getSelectedTalkgroup();
+            const [tgSystem, talkgroup] = this.getSelectedTalkgroup();
 
             if (talkgroup) {
                 options.talkgroup = talkgroup.id;
+
+                if (tgSystem && options.system === undefined) {
+                    options.system = tgSystem.id;
+                }
             }
         }
 
@@ -375,11 +391,26 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         return this.optionsTag[this.form.value.tag];
     }
 
-    private getSelectedTalkgroup(): RdioScannerTalkgroup | undefined {
-        const system = this.getSelectedSystem();
+    private getSelectedTalkgroup(): [RdioScannerSystem, RdioScannerTalkgroup] | [undefined, undefined] {
+        const selectedTgOption = this.optionsTalkgroup[this.form.value.talkgroup];
+        if (!selectedTgOption) {
+            return [undefined, undefined];
+        }
 
-        return system
-            ? system.talkgroups.find((talkgroup) => talkgroup.label === this.optionsTalkgroup[this.form.value.talkgroup])
-            : undefined;
+        const [system, talkgroupLabel] = selectedTgOption;
+
+        const selectedSystem = this.getSelectedSystem();
+        const selectedSystems = selectedSystem ? [selectedSystem] : this.config?.systems ?? [];
+
+        if (!selectedSystems.find((selectedSys) => selectedSys.id === system.id)) {
+            return [undefined, undefined];
+        }
+
+        const talkgroup = system.talkgroups.find((talkgroup) => talkgroup.label === talkgroupLabel);
+        if (!talkgroup) {
+            return [undefined, undefined];
+        }
+
+        return [system, talkgroup];
     }
 }

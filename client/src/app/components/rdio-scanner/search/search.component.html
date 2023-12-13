@@ -7,14 +7,14 @@
                 <button *ngIf="downloadMode.checked && row" mat-icon-button (click)="download(+row.id)">
                     <mat-icon>save_alt</mat-icon>
                 </button>
-                <button *ngIf="row && !downloadMode.checked && !paused && row?.id != call?.id && row?.id != callPending"
+                <button *ngIf="row && !downloadMode.checked && !paused && row?.id !== call?.id && row?.id !== callPending"
                     mat-icon-button (click)="play(+row.id)">
                     <mat-icon>play_arrow</mat-icon>
                 </button>
-                <button *ngIf="row && !downloadMode.checked && row?.id == callPending" mat-icon-button>
+                <button *ngIf="row && !downloadMode.checked && row?.id === callPending" mat-icon-button>
                     <mat-icon class="spin">cached</mat-icon>
                 </button>
-                <button *ngIf="row && !downloadMode.checked && row?.id == call?.id" mat-icon-button (click)="stop()">
+                <button *ngIf="row && !downloadMode.checked && row?.id === call?.id" mat-icon-button (click)="stop()">
                     <mat-icon>stop</mat-icon>
                 </button>
             </mat-cell>
@@ -78,7 +78,7 @@
         <mat-slide-toggle #downloadMode color="primary" labelPosition="before">
             <mat-icon>save_alt</mat-icon>
         </mat-slide-toggle>
-        <mat-paginator [disabled]="livefeedPlayback || resultsPending" [length]="playbackList?.count"
+        <mat-paginator [disabled]="livefeedPlayback || resultsPending" [length]="playbackList?.count ?? 0"
             [hidePageSize]="true" [pageSize]="results.value.length" [showFirstLastButtons]="true"
             (page)="refreshResults()">
         </mat-paginator>
@@ -127,8 +127,8 @@
                 <mat-option [value]="-1">
                     All Talkgroups
                 </mat-option>
-                <mat-option *ngFor="let talkgroup of optionsTalkgroup; index as i" [value]="i">
-                    {{ talkgroup }}
+                <mat-option *ngFor="let option of optionsTalkgroup; index as i" [value]="i">
+                    {{ option[1] }}
                 </mat-option>
             </mat-select>
         </mat-form-field>
