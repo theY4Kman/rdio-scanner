@@ -18,6 +18,8 @@ I will attempt to retain semantic versioning on the fork version.
 - Allow unit labels to be configured directly on main display
 - Ingest call frequencies/sources `pos` in floating-point precision (instead of integer)
 - Change update interval of frequency (incl errors/spikes) and source (unit) data on main display from .5s to .1s
+- Clear UID on main display when call ends
+- Show total/current source count on main display
 - (dev) Allow configuration of dev server API proxy URL with `API_URL` env var
 
 ### Removed

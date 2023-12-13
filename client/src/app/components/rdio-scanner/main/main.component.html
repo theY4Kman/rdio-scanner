@@ -54,7 +54,14 @@
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
-          <span *ngIf="callUnit">UID: <rdio-scanner-call-source [call]="call" [source]="callSource" (edit)="configureSource($event.system, $event.source)"></rdio-scanner-call-source></span>
+          <span *ngIf="callUnit">
+            <span>UID<span *ngIf="callNumSources > 1"> ({{ callSourceIndex + 1 }}/{{ callNumSources }})</span>: </span>
+            <rdio-scanner-call-source
+              [call]="call"
+              [source]="callSource"
+              (edit)="configureSource($event.system, $event.source)"
+            ></rdio-scanner-call-source>
+          </span>
         </div>
     </div>
     <div class="row right small">

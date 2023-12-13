@@ -74,6 +74,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     callQueue = 0;
     callQueueDuration = 0;
     callSource: RdioScannerCallSource | undefined;
+    callNumSources = 0;
+    callSourceIndex = 0;
     callSpike = '0';
     callSystem = 'System';
     callTag = 'Tag';
@@ -81,7 +83,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     callTalkgroupId = '0';
     callTalkgroupName = `Rdio Scanner v${packageInfo.version}`;
     callTime = 0;
-    callUnit = '0';
+    callUnit: string | undefined = undefined;
 
     clock = new Date();
 
@@ -748,6 +750,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
             this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call?.frequency);
 
+            this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
+
             this.callDuration = this.call.audioDuration || 0;
 
             if (Array.isArray(this.call.frequencies) && this.call.frequencies.length) {
@@ -769,21 +773,26 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 this.callSpike = '';
             }
 
-            if (Array.isArray(this.call.sources) && this.call.sources.length) {
+            if (time >= this.callDuration) {
+                this.callUnit = undefined;
+
+            } else if (Array.isArray(this.call.sources) && this.call.sources.length) {
+                this.callNumSources = this.call.sources.length;
+
                 const source = this.call.sources.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
                 this.callSource = source;
-
-                this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
+                this.callSourceIndex = this.call.sources.indexOf(source);
 
                 if (typeof source.src === 'number' && this.unitsIndex != null) {
                     this.callUnit = this.unitsIndex[this.call.system]?.[source.src] ?? `${source.src}`;
 
                 } else {
-                    this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
+                    this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : undefined;
                 }
 
             } else {
-                this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
+                this.callNumSources = 1;
+                this.callSourceIndex = 0;
 
                 this.callUnit = this.call.systemData?.units?.find((u) => u.id === this.call?.source)?.label ?? `${this.call.source ?? ''}`;
 
