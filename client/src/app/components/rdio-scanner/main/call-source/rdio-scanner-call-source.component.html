@@ -2,9 +2,9 @@
   <a
     class="source configure-source"
     *ngIf="source.src; else noSrc"
-    [ngClass]="{ 'known': source.label != null, 'unknown': source.label == null }"
+    [ngClass]="{'known': source.label != null, 'unknown': source.label == null, 'editable': edit.observed}"
     (click)="onLabelClick()"
     [title]="formatSrcId(source.src)"
   >{{ source.label ?? formatSrcId(source.src) }}</a>
-  <ng-template #noSrc>{{ source.label ?? '?' }}</ng-template>
+  <ng-template #noSrc><em>{{ source.label ?? '?' }}</em></ng-template>
 </ng-container>

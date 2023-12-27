@@ -160,7 +160,13 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 
 	call := Call{Id: id}
 
-	query := fmt.Sprintf("select `audio`, `audioName`, `audioType`, `audioDuration`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
+	query := fmt.Sprintf(`
+		SELECT "audio", "audioName", "audioType", "audioDuration", "DateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup" 
+		from "rdioScannerCalls" 
+		where "id" = %v
+		`,
+		id,
+	)
 	err := db.Sql.QueryRow(query).Scan(&call.Audio, &audioName, &audioType, &call.AudioDuration, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
@@ -392,7 +398,15 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	query = fmt.Sprintf("select `id`, `DateTime`, `system`, `talkgroup`, `audioDuration` from `rdioScannerCalls` where %v order by `dateTime` %v limit %v offset %v", where, order, limit, offset)
+	query = fmt.Sprintf(`
+		select "id", "DateTime", "system", "talkgroup", "audioDuration", "source", "sources"
+		from "rdioScannerCalls" 
+		where %v 
+		order by "dateTime" %v 
+		limit %v 
+		offset %v`,
+		where, order, limit, offset,
+	)
 	if rows, err = db.Sql.Query(query); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
@@ -406,8 +420,20 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	searchResults.Results = make([]CallsSearchResult, 0, numResults)
 
 	for rows.Next() {
+		var (
+			source  sql.NullFloat64
+			sources string
+		)
 		searchResult := CallsSearchResult{}
-		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup, &searchResult.AudioDuration); err != nil {
+		if err = rows.Scan(
+			&id,
+			&dateTime,
+			&searchResult.System,
+			&searchResult.Talkgroup,
+			&searchResult.AudioDuration,
+			&source,
+			&sources,
+		); err != nil {
 			break
 		}
 
@@ -420,6 +446,16 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 		} else {
 			continue
+		}
+
+		if source.Valid && source.Float64 > 0 {
+			searchResult.Source = uint(source.Float64)
+		}
+
+		if len(sources) > 0 {
+			if err = json.Unmarshal([]byte(sources), &searchResult.Sources); err != nil {
+				searchResult.Sources = []any{}
+			}
 		}
 
 		searchResults.Results = append(searchResults.Results, searchResult)
@@ -562,6 +598,8 @@ type CallsSearchResult struct {
 	System        uint      `json:"system"`
 	Talkgroup     uint      `json:"talkgroup"`
 	AudioDuration float32   `json:"audioDuration"`
+	Source        any       `json:"source"`
+	Sources       any       `json:"sources"`
 }
 
 type CallsSearchResults struct {

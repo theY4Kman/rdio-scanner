@@ -56,20 +56,25 @@
                 <span>Talkgroup</span>
             </mat-header-cell>
             <mat-cell *matCellDef="let row">
-                <span>{{ row?.talkgroupData?.label || row?.talkgroup }}</span>
+                <span [title]="row?.talkgroupData?.name">{{ row?.talkgroupData?.label || row?.talkgroup }}</span>
             </mat-cell>
         </ng-container>
-        <ng-container matColumnDef="name">
+        <ng-container matColumnDef="unit">
             <mat-header-cell *matHeaderCellDef>
-                <span>Name</span>
+                <span>Unit(s)</span>
             </mat-header-cell>
             <mat-cell *matCellDef="let row">
-                <span>{{ row?.talkgroupData?.name }}</span>
+                <span *ngIf="row?.sources?.length">
+                    <span *ngFor="let source of row.sources; first as isFirst">
+                        <span *ngIf="!isFirst">, </span>
+                        <rdio-scanner-call-source [call]="row" [source]="source"></rdio-scanner-call-source>
+                    </span>
+                </span>
             </mat-cell>
         </ng-container>
-        <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'duration', 'system', 'alpha', 'name']">
+        <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'duration', 'system', 'alpha', 'unit']">
         </mat-header-row>
-        <mat-row *matRowDef="let row; columns: ['control', 'date', 'time', 'duration', 'system', 'alpha', 'name']">
+        <mat-row *matRowDef="let row; columns: ['control', 'date', 'time', 'duration', 'system', 'alpha', 'unit']">
         </mat-row>
     </mat-table>
     <mat-progress-bar color="primary" [mode]="resultsPending ? 'query' : 'determinate'">
