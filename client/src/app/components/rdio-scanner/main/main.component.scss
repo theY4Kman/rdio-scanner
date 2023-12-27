@@ -200,7 +200,8 @@ $led-yellow: rgb(255, 234, 0);
       }
 
       &.unit {
-        width: 40%;
+        // Unit labels take up the most space, so afford them the most
+        width: 100%;
         text-overflow: ellipsis;
       }
     }
