@@ -56,11 +56,7 @@
         <div>
           <span *ngIf="callUnit">
             <span>UID<span *ngIf="callNumSources > 1"> ({{ callSourceIndex + 1 }}/{{ callNumSources }})</span>: </span>
-            <rdio-scanner-call-source
-              [call]="call"
-              [source]="callSource"
-              (edit)="configureSource($event.system, $event.source)"
-            ></rdio-scanner-call-source>
+            <rdio-scanner-call-source [call]="call" [source]="callSource"></rdio-scanner-call-source>
           </span>
         </div>
     </div>
@@ -87,34 +83,6 @@
                     <mat-error *ngIf="authForm.get('password')?.hasError('tooMany')">
                         Too many connections
                     </mat-error>
-                </mat-form-field>
-            </form>
-        </div>
-        <div class="admin-auth" [ngClass]="{ visible: isConfiguringUnitLabel }">
-            <ng-container *ngIf="!isAdminAuthenticated">
-                <rdio-scanner-admin-login class="modal" [focused]="true" (blur)="this.isConfiguringUnitLabel = false">
-                    Enter admin password to configure unit label
-                </rdio-scanner-admin-login>
-            </ng-container>
-            <form
-                *ngIf="isAdminAuthenticated"
-                class="mat-elevation-z8"
-                autocomplete="off"
-                [formGroup]="unitLabelForm"
-                (ngSubmit)="this.isConfiguringUnitLabel = !submitUnitLabelConfiguration()"
-            >
-                <mat-form-field>
-                    <input
-                        #label
-                        matInput
-                        autocomplete="off"
-                        formControlName="label"
-                        [placeholder]="'Unit label: ' + formatCallSourceId(configureUnitLabelSource)"
-                        (blur)="this.isConfiguringUnitLabel = false"
-                        onfocus="this.select()"
-                        [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel"
-                        [cdkTrapFocus]="isConfiguringUnitLabel"
-                    >
                 </mat-form-field>
             </form>
         </div>
@@ -161,7 +129,7 @@
                             <span *ngIf="previousCall.sources?.length">
                                 <span *ngFor="let source of previousCall.sources; first as isFirst">
                                     <span *ngIf="!isFirst">, </span>
-                                    <rdio-scanner-call-source [call]="previousCall" [source]="source" (edit)="configureSource($event.system, $event.source)"></rdio-scanner-call-source>
+                                    <rdio-scanner-call-source [call]="previousCall" [source]="source"></rdio-scanner-call-source>
                                 </span>
                             </span>
                         </span>

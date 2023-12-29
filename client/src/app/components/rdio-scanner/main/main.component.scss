@@ -96,8 +96,7 @@ $led-yellow: rgb(255, 234, 0);
     }
   }
 
-  .auth,
-  .admin-auth {
+  .auth {
     align-items: center;
     display: flex;
     flex-direction: row;
@@ -121,14 +120,6 @@ $led-yellow: rgb(255, 234, 0);
       input {
         text-align: center;
       }
-    }
-  }
-
-  .configure-source {
-    cursor: pointer;
-
-    &:hover {
-      text-decoration: underline;
     }
   }
 

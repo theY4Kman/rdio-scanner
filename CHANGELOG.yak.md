@@ -21,6 +21,8 @@ I will attempt to retain semantic versioning on the fork version.
 - Clear UID on main display when call ends
 - Show total/current source count on main display
 - Include unit labels on search page
+- Enable unit label configuration on search page
+- Add button to delete unit label
 - (dev) Allow configuration of dev server API proxy URL with `API_URL` env var
 
 ### Removed

@@ -153,10 +153,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     private dimmerTimer: Subscription | undefined;
 
     unitsIndex: RdioScannerUnitsIndex | undefined;
-    unitLabelForm = this.ngFormBuilder.group({ label: [] });
-    isConfiguringUnitLabel = false;
-    configureUnitLabelSystem: number = 1;
-    configureUnitLabelSource: RdioScannerCallSource | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
@@ -235,7 +231,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 description: 'Close any open prompts or modals',
                 command: () => {
                     this.auth = false;
-                    this.isConfiguringUnitLabel = false;
                 },
             }
         );
@@ -587,26 +582,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             .concat(' Hz') : '';
     }
 
-    formatUnitLabels(call: RdioScannerCall): string {
-        if (!call) return '';
-
-        if (Array.isArray(call.sources)) {
-            return call.sources.map(({ label }) => label).join(', ');
-        }
-
-        if (typeof call.source === 'number') {
-            return this.unitsIndex?.[call.system]?.[call.source] ?? `${call.source}`;
-        }
-
-        return '';
-    }
-
-    formatCallSourceId(source?: RdioScannerCallSource): string {
-        if (!source || !source.src) return 'Ø';
-
-        return source.src.toString(16).toUpperCase();
-    }
-
     calcNumUniqueSources(call: RdioScannerCall): number {
         if (!call) return 0;
 
@@ -628,48 +603,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         }
 
         return this.config.afs.split(',').includes(talkgroupId.toString());
-    }
-
-    configureSource(system: number, source: RdioScannerCallSource): void {
-        this.isConfiguringUnitLabel = true;
-        this.configureUnitLabelSystem = system;
-        this.configureUnitLabelSource = source;
-        this.unitLabelForm.get('label')?.setValue(source.label ?? '');
-    }
-
-    async submitUnitLabelConfiguration(): Promise<boolean> {
-        if (this.unitLabelForm.invalid) {
-            return false;
-        }
-
-        const label = this.unitLabelForm.get('label')?.value;
-
-        if (typeof label !== 'string' || label === '' || label === this.configureUnitLabelSource?.label) {
-            return true;
-        }
-
-        const config = await this.adminService.getConfig();
-
-        const system = config.systems?.find((s) => s.id === this.configureUnitLabelSystem);
-        if (!system) {
-            return true;
-        }
-
-        const unitId = this.configureUnitLabelSource?.src;
-        const unit = system.units?.find((u) => u.id === unitId);
-
-        if (unit) {
-            unit.label = label;
-        } else {
-            if (!system.units) {
-                system.units = [];
-            }
-            system.units.push({ id: unitId, label, order: system.units.length });
-        }
-
-        await this.adminService.saveConfig(config);
-
-        return true;
     }
 
     /**

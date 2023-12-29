@@ -376,6 +376,10 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             this.paused = event.pause || false;
         }
 
+        if ('unitsIndex' in event) {
+            this.propagateUnitLabels();
+        }
+
         this.ngChangeDetectorRef.detectChanges();
     }
 
@@ -412,5 +416,26 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         }
 
         return [system, talkgroup];
+    }
+
+    /**
+     * Propagate changes to unit labels to calls in search results
+     */
+    private propagateUnitLabels(): void {
+        this.rdioScannerService.propagateUnitLabels(this.iterManagedCalls());
+    }
+
+    private *iterManagedCalls(): Iterable<RdioScannerCall> {
+        if (this.playbackList) {
+            yield* this.playbackList.results;
+        }
+
+        if (this.call) {
+            yield this.call;
+        }
+
+        if (this.results.value) {
+            yield* this.results.value.filter((call) => call !== null) as RdioScannerCall[];
+        }
     }
 }

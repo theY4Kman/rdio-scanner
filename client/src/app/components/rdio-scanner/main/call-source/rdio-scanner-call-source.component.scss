@@ -1,4 +1,4 @@
-.configure-source.editable {
+.configure-source.clickable {
   cursor: pointer;
 }
 
@@ -6,7 +6,43 @@
   &.known {
     color: darken(rgb(0, 230, 118), 20);
   }
+
   &.unknown {
     color: darken(rgb(255, 152, 0), 20);
+  }
+}
+
+.label-form {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  position: absolute;
+  top: 0;
+  visibility: hidden;
+  width: 100%;
+  z-index: 1;
+
+  &.visible {
+    visibility: visible;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    background: rgb(240, 240, 240);
+    border-radius: 8px;
+    padding: 8px 32px;
+
+    input {
+      text-align: center;
+    }
+
+    .delete-button {
+      align-self: end;
+      text-transform: uppercase;
+    }
   }
 }
