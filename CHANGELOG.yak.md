@@ -31,6 +31,7 @@ I will attempt to retain semantic versioning on the fork version.
 ### Fixed
 - Show all TGs in search panel TG filter if no other filters configured
 - Use double quotes in migrations (instead of backticks) for Postgres compat
+- Prevent unit label config form closing or switching units when underlying call changes
 
 ### Changed
 - Improve search query perf by limiting datetime bounds queries

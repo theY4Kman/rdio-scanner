@@ -1,0 +1,14 @@
+<ng-container *ngIf="call && source">
+  <ng-container
+    *ngIf="source.src; else noSrc"
+  >
+    <a
+      class="source configure-source"
+      [ngClass]="{'known': source.label != null, 'unknown': source.label == null, 'clickable': isLabelClickable}"
+      (click)="onLabelClick()"
+      [title]="formatSrcId(source.src)"
+    >{{ source.label ?? formatSrcId(source.src) }}</a>
+  </ng-container>
+
+  <ng-template #noSrc><em>{{ source.label ?? '?' }}</em></ng-template>
+</ng-container>

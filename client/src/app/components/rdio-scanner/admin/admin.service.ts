@@ -381,6 +381,45 @@ export class RdioScannerAdminService implements OnDestroy {
         }
     }
 
+    async setUnitLabel(systemId: number, unitId: number, label: string): Promise<boolean> {
+        const config = await this.getConfig();
+
+        const system = config.systems?.find((s) => s.id === systemId);
+        if (!system) {
+            return true;
+        }
+
+        const unit = system.units?.find((u) => u.id === unitId);
+
+        if (unit) {
+            unit.label = label;
+        } else {
+            if (!system.units) {
+                system.units = [];
+            }
+            system.units.push({ id: unitId, label, order: system.units.length });
+        }
+
+        await this.saveConfig(config);
+
+        return true;
+    }
+
+    async deleteUnitLabel(systemId: number, unitId: number): Promise<boolean> {
+        const config = await this.getConfig();
+
+        const system = config.systems?.find((s) => s.id === systemId);
+        if (!system || !system.units) {
+            return false;
+        }
+
+        system.units = system.units.filter((u) => u.id !== unitId);
+
+        await this.saveConfig(config);
+
+        return true;
+    }
+
     newAccessForm(access?: Access): FormGroup {
         return this.ngFormBuilder.group({
             _id: [access?._id],

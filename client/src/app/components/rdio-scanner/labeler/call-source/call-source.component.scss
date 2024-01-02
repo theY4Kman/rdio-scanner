@@ -1,0 +1,13 @@
+.configure-source.clickable {
+  cursor: pointer;
+}
+
+.source {
+  &.known {
+    color: darken(rgb(0, 230, 118), 20);
+  }
+
+  &.unknown {
+    color: darken(rgb(255, 152, 0), 20);
+  }
+}
