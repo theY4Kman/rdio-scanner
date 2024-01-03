@@ -4,6 +4,9 @@ Since I occasionally pull in upstream changes, the original changelog will remai
 I will attempt to retain semantic versioning on the fork version.
 
 ## Unreleased
+
+
+## [6.6.3-yak.0.0.1] — 2024-01-03
 ### Added
 - Click call in playback history to replay call
 - Include talkgroup's full name as title tooltip on TG selection panel

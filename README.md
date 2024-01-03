@@ -31,14 +31,14 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 
    | Operating system | Architecture | Use package                           |
    | -----------------| ------------ | ------------------------------------- |
-   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3.zip |
-   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3.zip     |
-   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3.zip   |
-   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3.zip     |
-   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3.zip   |
-   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
-   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3.zip   |
-   | Windows          | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
+   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3-yak.0.0.1.zip |
+   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3-yak.0.0.1.zip     |
+   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3-yak.0.0.1.zip   |
+   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3-yak.0.0.1.zip     |
+   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3-yak.0.0.1.zip   |
+   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3-yak.0.0.1.zip   |
+   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3-yak.0.0.1.zip   |
+   | Windows          | amd64        | rdio-scanner-macos-amd64-v6.6.3-yak.0.0.1.zip   |
 
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.

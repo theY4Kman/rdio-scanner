@@ -16,8 +16,8 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2022/11/25
-ver := 6.6.3
+date := 2024/01/03
+ver := 6.6.3-yak.0.0.1
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
@@ -48,7 +48,7 @@ dist: freebsd linux macos windows
 sed:
 	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" client/package.json
 	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" server/version.go
-	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
+	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+(-yak.[0-9]+\.[0-9]+\.[0-9]+)?|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
 
 webapp: server/webapp/index.html
