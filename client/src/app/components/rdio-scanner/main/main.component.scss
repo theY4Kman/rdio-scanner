@@ -96,6 +96,19 @@ $led-yellow: rgb(255, 234, 0);
     }
   }
 
+  .units {
+    > span {
+      display: inline-block;
+      width: 8rem;
+      text-align: center;
+      text-overflow: ellipsis;
+
+      &.active {
+        font-weight: bold;
+      }
+    }
+  }
+
   .auth {
     align-items: center;
     display: flex;

@@ -54,21 +54,50 @@
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
-          <span *ngIf="callUnit">
-            <span>UID<span *ngIf="callNumSources > 1"> ({{ callSourceIndex + 1 }}/{{ callNumSources }})</span>: </span>
-            <rdio-scanner-call-source [call]="call" [source]="callSource"></rdio-scanner-call-source>
+          <span *ngIf="call && callUnit" class="units">
+            <span class="prev">
+              <rdio-scanner-call-source *ngIf="callSourceIndex >= 1" [call]="call" [source]="call.sources?.[callSourceIndex - 1]"></rdio-scanner-call-source>
+            </span>
+            <span class="active">
+              <rdio-scanner-call-source [call]="call" [source]="callSource"></rdio-scanner-call-source>
+            </span>
+            <span class="next">
+              <rdio-scanner-call-source *ngIf="callSourceIndex < callNumSources - 1" [call]="call" [source]="call.sources?.[callSourceIndex + 1]"></rdio-scanner-call-source>
+            </span>
           </span>
         </div>
     </div>
-    <div class="row right small">
-        <div *ngIf="tempAvoid">
-            <span class="flag" [ngClass]="{ flagged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
+    <div class="row small">
+        <div>
+            <div *ngIf="tempAvoid">
+                <span class="flag" [ngClass]="{ flagged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
+            </div>
+            <div *ngIf="avoided">
+                <span class="flag" [ngClass]="{ flagged: avoided }">AVOID</span>
+            </div>
+            <div *ngIf="patched">
+                <span class="flag" [ngClass]="{ flagged: patched }">PATCH</span>
+            </div>
         </div>
         <div>
-            <span class="flag" [ngClass]="{ flagged: avoided }">AVOID</span>
-        </div>
-        <div>
-            <span class="flag" [ngClass]="{ flagged: patched }">PATCH</span>
+          <span *ngIf="call && callUnit" class="units">
+            <span class="prev">
+              <span *ngIf="callSourceIndex >= 1">
+                [{{ callSourceIndex }}/{{ callNumSources }}]
+                {{ (call.sources?.[callSourceIndex]?.pos ?? 0) - (call.sources?.[callSourceIndex - 1]?.pos ?? 0) | duration }}s
+              </span>
+            </span>
+            <span class="active">
+              [{{ callSourceIndex + 1 }}/{{ callNumSources }}]
+              {{ (call.sources?.[callSourceIndex + 1]?.pos ?? callDuration) - (call.sources?.[callSourceIndex]?.pos ?? 0) | duration }}s
+            </span>
+            <span class="next">
+              <span *ngIf="callSourceIndex < callNumSources - 1">
+                [{{ callSourceIndex + 2 }}/{{ callNumSources }}]
+                {{ (call.sources?.[callSourceIndex + 2]?.pos ?? callDuration) - (call.sources?.[callSourceIndex + 1]?.pos ?? 0) | duration }}s
+              </span>
+            </span>
+          </span>
         </div>
     </div>
     <div class="wrapper">
