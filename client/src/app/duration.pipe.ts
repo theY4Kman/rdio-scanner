@@ -5,8 +5,8 @@ import { formatNumber } from "@angular/common";
   name: 'duration',
 })
 export class DurationPipe implements PipeTransform {
-  transform(value?: number, precision: number = 1): string {
-    if (value === undefined) {
+  transform(value?: number | null, precision: number = 1): string {
+    if (value == null) {
       return '';
     }
 

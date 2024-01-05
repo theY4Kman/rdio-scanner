@@ -32,7 +32,7 @@ import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { interval, Subscription, timer } from 'rxjs';
+import { BehaviorSubject, interval, map, Observable, Subject, Subscription, timer } from 'rxjs';
 import packageInfo from '../../../../../package.json';
 import {
     RdioScannerAvoidOptions,
@@ -102,7 +102,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     livefeedOnline = false;
     livefeedPaused = false;
     livefeedPausedAt: Date | undefined;
-    livefeedPausedSeconds = 0;
+    livefeedPausedSeconds$ = new BehaviorSubject<number>(0);
 
     /**
      * Returns the duration the live feed has been paused, in seconds.
@@ -633,15 +633,14 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.pausedDurationTimer = undefined;
 
         this.pausedDurationTimer = interval(1000).subscribe(() => {
-            this.livefeedPausedSeconds = Math.floor(this.livefeedPausedDuration);
-            this.ngChangeDetectorRef.detectChanges();
+            this.livefeedPausedSeconds$.next(Math.floor(this.livefeedPausedDuration));
         });
     }
 
     private stopPausedDurationTimer(): void {
         this.pausedDurationTimer?.unsubscribe();
         this.pausedDurationTimer = undefined;
-        this.livefeedPausedSeconds = 0;
+        this.livefeedPausedSeconds$.next(0);
     }
 
     private updateDimmer(): void {
