@@ -6,6 +6,7 @@ I will attempt to retain semantic versioning on the fork version.
 ## Unreleased
 ### Added
 - Show prev/current/next units in main display
+- Click prev/current/next unit metadata to seek within call
 
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03

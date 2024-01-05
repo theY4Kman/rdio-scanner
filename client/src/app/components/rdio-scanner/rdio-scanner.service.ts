@@ -548,6 +548,28 @@ export class RdioScannerService implements OnDestroy {
         });
     }
 
+    seek(seconds: number): boolean {
+        if (!this.call || !this.audioSource || !this.audioContext) {
+            return false;
+        }
+
+        const prevAudioSource = this.audioSource;
+        const prevOnEnded = prevAudioSource.onended;
+        this.audioSource.onended = null;
+        this.audioSource.stop();
+
+        this.audioSource = this.audioContext.createBufferSource();
+        this.audioSource.buffer = prevAudioSource.buffer;
+        this.audioSource.connect(this.audioContext.destination);
+        this.audioSource.onended = prevOnEnded;
+        this.audioSource.start(0, seconds);
+
+        this.audioSourceStartTime = this.audioContext.currentTime - seconds;
+        this.event.emit({ call: this.call, time: seconds });
+
+        return true;
+    }
+
     queue(call: RdioScannerCall, options?: { priority?: boolean }): void {
         if (!call?.audio || this.livefeedMode === RdioScannerLivefeedMode.Offline) {
             return;

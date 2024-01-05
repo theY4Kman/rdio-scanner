@@ -643,6 +643,16 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.livefeedPausedSeconds$.next(0);
     }
 
+    seekToSource(call: RdioScannerCall, source?: RdioScannerCallSource): void {
+        if (!source) {
+            return;
+        }
+
+        if (source.pos != null) {
+            this.rdioScannerService.seek(source.pos);
+        }
+    }
+
     private updateDimmer(): void {
         if (typeof this.config?.dimmerDelay !== 'number') {
             return;

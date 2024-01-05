@@ -80,19 +80,19 @@
             </div>
         </div>
         <div>
-          <span *ngIf="call && callUnit" class="units">
-            <span class="prev">
+          <span *ngIf="call && callUnit" class="units meta">
+            <span class="prev" (click)="seekToSource(call, call.sources?.[callSourceIndex - 1])">
               <span *ngIf="callSourceIndex >= 1">
                 [{{ callSourceIndex }}/{{ callNumSources }}]
                 {{ (call.sources?.[callSourceIndex]?.pos ?? 0) - (call.sources?.[callSourceIndex - 1]?.pos ?? 0) | duration }}s
               </span>
             </span>
-            <span class="active">
+            <span class="active" (click)="seekToSource(call, call.sources?.[callSourceIndex])">
               [{{ callSourceIndex + 1 }}/{{ callNumSources }}]
               {{ (call.sources?.[callSourceIndex + 1]?.pos ?? callDuration) - (call.sources?.[callSourceIndex]?.pos ?? 0) | duration }}s
             </span>
             <span class="next">
-              <span *ngIf="callSourceIndex < callNumSources - 1">
+              <span *ngIf="callSourceIndex < callNumSources - 1" (click)="seekToSource(call, call.sources?.[callSourceIndex + 1])">
                 [{{ callSourceIndex + 2 }}/{{ callNumSources }}]
                 {{ (call.sources?.[callSourceIndex + 2]?.pos ?? callDuration) - (call.sources?.[callSourceIndex + 1]?.pos ?? 0) | duration }}s
               </span>
