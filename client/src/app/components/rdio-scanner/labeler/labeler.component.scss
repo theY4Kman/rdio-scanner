@@ -24,6 +24,10 @@
 
     input {
       text-align: center;
+
+      &.mat-input-element {
+        color: black;
+      }
     }
 
     .delete-button {

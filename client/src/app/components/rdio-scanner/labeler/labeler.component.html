@@ -1,5 +1,10 @@
 <ng-container>
-  <div class="label-form" [ngClass]="{ visible: isConfiguringUnitLabel | async }">
+  <div
+    class="label-form"
+    [ngClass]="{ visible: isConfiguringUnitLabel | async }"
+    [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel | async"
+    [cdkTrapFocus]="isConfiguringUnitLabel | async"
+  >
     <ng-container *ngIf="!isAdminAuthenticated">
       <rdio-scanner-admin-login class="modal" [focused]="true" (blur)="this.labeler.cancelUnitLabelConfiguration()">
         Enter admin password to configure unit label
@@ -19,8 +24,6 @@
           formControlName="label"
           [placeholder]="(unitLabelPlaceholder$ | async) || 'Unit label'"
           onfocus="this.select()"
-          [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel | async"
-          [cdkTrapFocus]="isConfiguringUnitLabel | async"
         >
       </mat-form-field>
 
