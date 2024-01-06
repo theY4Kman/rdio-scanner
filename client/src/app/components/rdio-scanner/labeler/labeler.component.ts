@@ -54,7 +54,7 @@ export class LabelerComponent implements OnInit, OnDestroy {
 
     async submitUnitLabelConfiguration(): Promise<void> {
         const label = this.unitLabelForm.get('label')?.value;
-        if (label == null || label === '') {
+        if (label == null || label === '' || label === this.labeler.unitLabelSource?.label) {
             this.labeler.cancelUnitLabelConfiguration();
             return;
         }
