@@ -467,6 +467,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             if (event.call) {
                 this.call = event.call;
 
+                if (!this.callHistory.find((call: RdioScannerCall) => call?.id === this.call?.id)) {
+                    this.callHistory.pop();
+                    this.callHistory.unshift(this.call);
+                }
+
                 this.updateDimmer();
             }
         }
