@@ -1,42 +1,40 @@
-<ng-container>
-  <div
-    class="label-form"
-    [ngClass]="{ visible: isConfiguringUnitLabel | async }"
-    [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel | async"
-    [cdkTrapFocus]="isConfiguringUnitLabel | async"
+<div
+  class="label-form"
+  [ngClass]="{ visible: isConfiguringUnitLabel | async }"
+  [cdkTrapFocusAutoCapture]="isConfiguringUnitLabel | async"
+  [cdkTrapFocus]="isConfiguringUnitLabel | async"
+>
+  <ng-container *ngIf="!isAdminAuthenticated">
+    <rdio-scanner-admin-login class="modal" [focused]="true" (blur)="this.labeler.cancelUnitLabelConfiguration()">
+      Enter admin password to configure unit label
+    </rdio-scanner-admin-login>
+  </ng-container>
+  <form
+    *ngIf="isAdminAuthenticated"
+    class="mat-elevation-z8"
+    autocomplete="off"
+    [formGroup]="unitLabelForm"
+    (ngSubmit)="submitUnitLabelConfiguration()"
   >
-    <ng-container *ngIf="!isAdminAuthenticated">
-      <rdio-scanner-admin-login class="modal" [focused]="true" (blur)="this.labeler.cancelUnitLabelConfiguration()">
-        Enter admin password to configure unit label
-      </rdio-scanner-admin-login>
-    </ng-container>
-    <form
-      *ngIf="isAdminAuthenticated"
-      class="mat-elevation-z8"
-      autocomplete="off"
-      [formGroup]="unitLabelForm"
-      (ngSubmit)="submitUnitLabelConfiguration()"
-    >
-      <mat-form-field>
-        <input
-          matInput
-          autocomplete="off"
-          formControlName="label"
-          [placeholder]="(unitLabelPlaceholder$ | async) || 'Unit label'"
-          onfocus="this.select()"
-        >
-      </mat-form-field>
+    <mat-form-field>
+      <input
+        matInput
+        autocomplete="off"
+        formControlName="label"
+        [placeholder]="(unitLabelPlaceholder$ | async) || 'Unit label'"
+        onfocus="this.select()"
+      >
+    </mat-form-field>
 
-      <button
-        mat-button
-        color="warn"
-        class="delete-button"
-        type="button"
-        [disabled]="this.labeler.unitLabelSource?.label == null || isLoading"
-        (click)="onDeleteClick()"
-        onclick="return false;"
-      >{{ !didClickDelete ? 'Delete' : 'Really?' }}
-      </button>
-    </form>
-  </div>
-</ng-container>
+    <button
+      mat-button
+      color="warn"
+      class="delete-button"
+      type="button"
+      [disabled]="this.labeler.unitLabelSource?.label == null || isLoading"
+      (click)="onDeleteClick()"
+      onclick="return false;"
+    >{{ !didClickDelete ? 'Delete' : 'Really?' }}
+    </button>
+  </form>
+</div>
