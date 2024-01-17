@@ -54,7 +54,7 @@
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
-          <span *ngIf="call && callUnit" class="units">
+          <span *ngIf="call && callUnit" class="units labels">
             <span class="prev">
               <rdio-scanner-call-source *ngIf="callSourceIndex >= 1" [call]="call" [source]="call.sources?.[callSourceIndex - 1]"></rdio-scanner-call-source>
             </span>

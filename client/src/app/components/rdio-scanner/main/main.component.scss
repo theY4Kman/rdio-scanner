@@ -105,7 +105,15 @@ $led-yellow: rgb(255, 234, 0);
 
       &.active {
         font-weight: bold;
+        width: 9rem;
       }
+    }
+
+    &.labels > .active {
+      font-size: 1.2em;
+    }
+    &.meta > .active {
+      font-size: 1.1em;
     }
   }
 
