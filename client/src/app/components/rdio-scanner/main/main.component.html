@@ -54,7 +54,7 @@
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
-          <span *ngIf="call && callUnit" class="units labels">
+          <span *ngIf="call" class="units labels">
             <span class="prev">
               <rdio-scanner-call-source *ngIf="callSourceIndex >= 1" [call]="call" [source]="call.sources?.[callSourceIndex - 1]"></rdio-scanner-call-source>
             </span>
@@ -80,7 +80,7 @@
             </div>
         </div>
         <div>
-          <span *ngIf="call && callUnit" class="units meta">
+          <span *ngIf="call" class="units meta">
             <span class="prev" (click)="seekToSource(call, call.sources?.[callSourceIndex - 1])">
               <span *ngIf="callSourceIndex >= 1">
                 [{{ callSourceIndex }}/{{ callNumSources }}]

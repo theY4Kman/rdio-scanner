@@ -196,6 +196,18 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 command: () => this.replay(),
             },
             {
+                key: ['shift + n', 'shift + right'],
+                label: 'Skip/Next Unit',
+                description: 'Skip active unit in current call',
+                command: () => this.skipSource(),
+            },
+            {
+                key: ['shift + p', 'shift + left'],
+                label: 'Replay Last Unit',
+                description: 'Replay last unit in current call',
+                command: () => this.replaySource(),
+            },
+            {
                 key: 'h s',
                 label: 'Hold System',
                 description: 'Hear only calls from the currently-playing system',
@@ -656,6 +668,42 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         if (source.pos != null) {
             this.rdioScannerService.seek(source.pos);
         }
+    }
+
+    async skipSource(): Promise<void> {
+        if (!this.call) {
+            void this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            return;
+        }
+
+        const nextSource = this.call.sources?.[this.callSourceIndex + 1];
+        if (!nextSource) {
+            this.skip();
+            return;
+        }
+
+        await this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        this.seekToSource(this.call, nextSource);
+    }
+
+    async replaySource(): Promise<void> {
+        if (!this.call || !this.callSource || this.callSourceIndex < 0) {
+            void this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            return;
+        }
+
+        const prevSource =
+            this.callSourceIndex === 0
+                ? this.callSource
+                : this.call.sources?.[this.callSourceIndex - 1];
+
+        if (!prevSource) {
+            this.replay();
+            return;
+        }
+
+        await this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        this.seekToSource(this.call, prevSource);
     }
 
     private updateDimmer(): void {

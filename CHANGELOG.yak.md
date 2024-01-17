@@ -9,6 +9,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Click prev/current/next unit metadata to seek within call
 - Show calls in playback history immediately upon playing (so full unit list can be viewed)
 - Increase font size of active unit in main display
+- Add basic skip/replay unit keyboard shortcuts (Shift+Left/Right) to seek within call
 
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03
