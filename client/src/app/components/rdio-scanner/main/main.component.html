@@ -1,7 +1,15 @@
 <ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!isOpen"></ng-keyboard-shortcuts>
 <ng-keyboard-shortcuts-help key="?"></ng-keyboard-shortcuts-help>
 <div class="rdio-status">
-    <div class="branding">{{ branding }}</div>
+    <div class="queued-calls">
+      <span *ngFor="let call of queuedCalls$ | async; let i = index; first as isFirst">
+        <span *ngIf="!isFirst">, </span>
+        <span class="queued-call">
+          <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
+          <span class="queued-call-tg {{ 'text-led-' + (call.talkgroupData?.led ?? 'green') }}">{{ (call.talkgroupData?.label || call.talkgroupData?.name || call.talkgroup).toString().trim() }}</span>
+        </span>
+      </span>
+    </div>
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">

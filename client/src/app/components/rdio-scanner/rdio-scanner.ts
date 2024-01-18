@@ -125,6 +125,7 @@ export interface RdioScannerEvent {
     playbackPending?: number;
     queue?: number;
     queueDuration?: number;
+    queuedCall?: RdioScannerCall;
     time?: number;
     tooMany?: boolean;
     unitsIndex?: RdioScannerUnitsIndex;

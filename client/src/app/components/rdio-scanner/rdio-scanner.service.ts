@@ -587,6 +587,7 @@ export class RdioScannerService implements OnDestroy {
                 ? {
                     queue: this.callQueue.length,
                     queueDuration: this.callQueueDuration,
+                    queuedCall: !options?.priority ? call : undefined,
                   }
                 : {
                     queue: this.getPlaybackQueueCount(),
