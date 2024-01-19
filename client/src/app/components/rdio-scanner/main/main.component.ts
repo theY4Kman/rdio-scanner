@@ -46,6 +46,7 @@ import {
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 import { RdioScannerAdminService } from '../admin/admin.service';
+import { first } from 'rxjs/operators';
 
 @Component({
     selector: 'rdio-scanner-main',
@@ -128,6 +129,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
     replayOffset = 0;
     replayTimer: Subscription | undefined;
+
+    replaySourceIndex: number | null = null;
+    replaySourceTimer: Subscription | undefined;
 
     tempAvoid = 0;
 
@@ -436,14 +440,16 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.openSelectPanel.emit();
     }
 
-    skip(options?: { delay?: boolean }): void {
-        if (this.authFocus()) return;
+    skip(options?: { delay?: boolean }): boolean {
+        if (this.authFocus()) return false;
 
         this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-        this.rdioScannerService.skip(options);
-
-        this.updateDimmer();
+        try {
+            return this.rdioScannerService.skip(options);
+        } finally {
+            this.updateDimmer();
+        }
     }
 
     stop(): void {
@@ -682,14 +688,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     }
 
     async skipSource(): Promise<void> {
-        if (!this.call) {
-            void this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
-            return;
-        }
-
-        const nextSource = this.call.sources?.[this.callSourceIndex + 1];
-        if (!nextSource) {
-            this.skip();
+        const nextSource = this.call?.sources?.[this.callSourceIndex + 1];
+        if (!nextSource || !this.call) {
+            if (!this.skip()) {
+                void this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            }
             return;
         }
 
@@ -698,16 +701,22 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     }
 
     async replaySource(): Promise<void> {
-        if (!this.call || !this.callSource || this.callSourceIndex < 0) {
-            void this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+        if (this.replaySourceTimer instanceof Subscription) {
+            this.replaySourceTimer.unsubscribe();
+            this.replaySourceIndex = Math.max(-1, (this.replaySourceIndex ?? 0) - 1);
+        }
+
+        this.replaySourceTimer = timer(750).subscribe(() => {
+            this.replaySourceTimer = undefined;
+            this.replaySourceIndex = this.callSourceIndex;
+        });
+
+        if (this.replaySourceIndex === -1 || !this.call) {
+            this.replay();
             return;
         }
 
-        const prevSource =
-            this.callSourceIndex === 0
-                ? this.callSource
-                : this.call.sources?.[this.callSourceIndex - 1];
-
+        const prevSource = this.call.sources?.[this.replaySourceIndex ?? this.callSourceIndex];
         if (!prevSource) {
             this.replay();
             return;

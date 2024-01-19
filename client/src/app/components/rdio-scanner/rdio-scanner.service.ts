@@ -419,9 +419,9 @@ export class RdioScannerService implements OnDestroy {
         this.getCall(id, WebsocketCallFlag.Download);
     }
 
-    loadAndPlay(id: number): void {
+    loadAndPlay(id: number): boolean {
         if (!id) {
-            return;
+            return false;
         }
 
         if (this.skipDelay) {
@@ -452,6 +452,7 @@ export class RdioScannerService implements OnDestroy {
         }
 
         this.getCall(id, WebsocketCallFlag.Play);
+        return true;
     }
 
     pause(status = !this.livefeedPaused): void {
@@ -476,9 +477,9 @@ export class RdioScannerService implements OnDestroy {
         });
     }
 
-    play(call?: RdioScannerCall | undefined): void {
+    play(call?: RdioScannerCall | undefined): boolean {
         if (this.livefeedPaused || this.skipDelay) {
-            return;
+            return false;
         }
 
         if (call?.audio) {
@@ -489,14 +490,14 @@ export class RdioScannerService implements OnDestroy {
             this.call = call;
 
         } else if (this.call) {
-            return;
+            return false;
 
         } else {
             this.call = this.callQueue.shift();
         }
 
         if (!this.call?.audio) {
-            return;
+            return false;
         }
 
         const queue = this.livefeedMode === RdioScannerLivefeedMode.Playback
@@ -546,6 +547,8 @@ export class RdioScannerService implements OnDestroy {
 
             this.skip({ delay: false });
         });
+
+        return true;
     }
 
     seek(seconds: number): boolean {
@@ -619,13 +622,13 @@ export class RdioScannerService implements OnDestroy {
         this.sendtoWebsocket(WebsocketCommand.ListCall, options);
     }
 
-    skip(options?: { delay?: boolean }): void {
+    skip(options?: { delay?: boolean }): boolean {
         const play = () => {
             if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
-                this.playbackNextCall();
+                return this.playbackNextCall();
 
             } else {
-                this.play();
+                return this.play();
             }
         };
 
@@ -637,6 +640,7 @@ export class RdioScannerService implements OnDestroy {
 
                 play();
             });
+            return true;
 
         } else {
             if (this.skipDelay) {
@@ -645,7 +649,7 @@ export class RdioScannerService implements OnDestroy {
                 this.skipDelay = undefined;
             }
 
-            play();
+            return play();
         }
     }
 
@@ -1084,18 +1088,19 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
-    private playbackNextCall(): void {
+    private playbackNextCall(): boolean {
         if (this.call || this.livefeedMode !== RdioScannerLivefeedMode.Playback || !this.playbackList || this.playbackPending) {
-            return;
+            return false;
         }
 
         const index = this.playbackList.results.findIndex((call) => call.id === this.callPrevious?.id);
 
         if (this.playbackList.options.sort === -1) {
             if (index === -1) {
-                this.loadAndPlay(this.playbackList.results[this.playbackList.results.length - 1].id);
+                return this.loadAndPlay(this.playbackList.results[this.playbackList.results.length - 1].id);
+            }
 
-            } else if (index === 0) {
+            if (index === 0) {
                 if (this.playbackList.options.offset < this.playbackList.options.limit) {
                     if (this.playbackRefreshing) {
                         this.stopPlaybackMode();
@@ -1109,42 +1114,45 @@ export class RdioScannerService implements OnDestroy {
                         this.searchCalls(this.playbackList.options);
                     }
 
-                } else {
-                    this.searchCalls(Object.assign({}, this.playbackList.options, {
-                        offset: this.playbackList.options.offset - this.playbackList.options.limit,
-                    }));
+                    return false;
                 }
 
-            } else {
-                this.loadAndPlay(this.playbackList.results[index - 1].id);
+                this.searchCalls(Object.assign({}, this.playbackList.options, {
+                    offset: this.playbackList.options.offset - this.playbackList.options.limit,
+                }));
+                return false;
             }
 
-        } else {
-            if (index === -1) {
-                this.loadAndPlay(this.playbackList.results[0].id);
+            return this.loadAndPlay(this.playbackList.results[index - 1].id);
 
-            } else if (index === this.playbackList.results.length - 1) {
-                if (this.playbackList.options.offset < (this.playbackList.count - this.playbackList.options.limit)) {
-                    this.searchCalls(Object.assign({}, this.playbackList.options, {
-                        offset: this.playbackList.options.offset + this.playbackList.options.limit,
-                    }));
-
-                } else if (this.playbackRefreshing) {
-                    this.stopPlaybackMode();
-
-                    if (this.config.playbackGoesLive) {
-                        this.startLivefeed();
-                    }
-
-                } else {
-                    this.playbackRefreshing = true;
-                    this.searchCalls(this.playbackList.options);
-                }
-
-            } else {
-                this.loadAndPlay(this.playbackList.results[index + 1].id);
-            }
         }
+
+        if (index === -1) {
+            return this.loadAndPlay(this.playbackList.results[0].id);
+
+        } else if (index === this.playbackList.results.length - 1) {
+            if (this.playbackList.options.offset < (this.playbackList.count - this.playbackList.options.limit)) {
+                this.searchCalls(Object.assign({}, this.playbackList.options, {
+                    offset: this.playbackList.options.offset + this.playbackList.options.limit,
+                }));
+
+            } else if (this.playbackRefreshing) {
+                this.stopPlaybackMode();
+
+                if (this.config.playbackGoesLive) {
+                    this.startLivefeed();
+                }
+
+            } else {
+                this.playbackRefreshing = true;
+                this.searchCalls(this.playbackList.options);
+            }
+
+            return false;
+
+        }
+
+        return this.loadAndPlay(this.playbackList.results[index + 1].id);
     }
 
     private readLivefeedMap(): void {
