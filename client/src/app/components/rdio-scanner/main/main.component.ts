@@ -662,6 +662,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.clockTimer = timer(1000 * (60 - this.clock.getSeconds())).subscribe(() => this.syncClock());
     }
 
+    isActiveCall(call?: RdioScannerCall): boolean {
+        return this.call?.id != null && this.call.id === call?.id;
+    }
+
     private startPausedDurationTimer(): void {
         this.pausedDurationTimer?.unsubscribe();
         this.pausedDurationTimer = undefined;

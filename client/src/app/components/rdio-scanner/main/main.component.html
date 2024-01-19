@@ -145,8 +145,8 @@
             </thead>
             <tbody>
                 <tr *ngFor="let previousCall of callHistory"
-                    [ngClass]="{ 'replaying': previousCall?.id != null && previousCall?.id === call?.id }"
-                    [class]="'led-' + (previousCall?.id != null && previousCall?.id === call?.id && previousCall.talkgroupData?.led ? previousCall.talkgroupData?.led ?? previousCall.systemData?.led : 'green')"
+                    [ngClass]="{ 'replaying': isActiveCall(previousCall) }"
+                    [class]="'led-' + (isActiveCall(previousCall) && previousCall.talkgroupData?.led ? previousCall.talkgroupData?.led ?? previousCall.systemData?.led : 'green')"
                     (click)="previousCall && play(previousCall.id)">
                     <td class="time">
                         <span>{{ previousCall?.dateTime | date:timeFormat }}</span>
@@ -164,9 +164,13 @@
                         <span *ngIf="previousCall">
                             <span>({{ calcNumUniqueSources(previousCall) }}) </span>
                             <span *ngIf="previousCall.sources?.length">
-                                <span *ngFor="let source of previousCall.sources; first as isFirst">
+                                <span *ngFor="let source of previousCall.sources; first as isFirst; index as previousCallSourceIndex">
                                     <span *ngIf="!isFirst">, </span>
-                                    <rdio-scanner-call-source [call]="previousCall" [source]="source"></rdio-scanner-call-source>
+                                    <rdio-scanner-call-source
+                                      [call]="previousCall"
+                                      [source]="source"
+                                      [ngStyle]="{ 'text-decoration': isActiveCall(previousCall) && previousCallSourceIndex === callSourceIndex ? 'underline' : 'none' }"
+                                    ></rdio-scanner-call-source>
                                 </span>
                             </span>
                         </span>
