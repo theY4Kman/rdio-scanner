@@ -130,7 +130,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     replayOffset = 0;
     replayTimer: Subscription | undefined;
 
-    replaySourceIndex: number | null = null;
     replaySourceTimer: Subscription | undefined;
 
     tempAvoid = 0;
@@ -705,22 +704,33 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     }
 
     async replaySource(): Promise<void> {
+        let replayDelta = 0;
+
         if (this.replaySourceTimer instanceof Subscription) {
             this.replaySourceTimer.unsubscribe();
-            this.replaySourceIndex = Math.max(-1, (this.replaySourceIndex ?? 0) - 1);
+            replayDelta = -1;
         }
+
+        const replaySourceIndex = this.callSourceIndex + replayDelta;
 
         this.replaySourceTimer = timer(750).subscribe(() => {
             this.replaySourceTimer = undefined;
-            this.replaySourceIndex = this.callSourceIndex;
         });
 
-        if (this.replaySourceIndex === -1 || !this.call) {
+        // Force replay to switch to previous call (if available)
+        if (replaySourceIndex === -1) {
+            this.replayOffset = Math.min(this.callHistory.length, this.replayOffset + 1)
             this.replay();
             return;
         }
 
-        const prevSource = this.call.sources?.[this.replaySourceIndex ?? this.callSourceIndex];
+        // If we're not currently listening to any call, replay the previous call
+        if (!this.call) {
+            this.replay();
+            return;
+        }
+
+        const prevSource = this.call?.sources?.[replaySourceIndex];
         if (!prevSource) {
             this.replay();
             return;
