@@ -225,6 +225,7 @@ export class RdioScannerService implements OnDestroy {
             map: this.livefeedMap,
             queue: this.callQueue.length,
             queueDuration: this.callQueueDuration,
+            queuedCalls: this.callQueue,
         });
     }
 
@@ -326,6 +327,7 @@ export class RdioScannerService implements OnDestroy {
                 map: this.livefeedMap,
                 queue: this.callQueue.length,
                 queueDuration: this.callQueueDuration,
+                queuedCalls: this.callQueue,
             });
         }
     }
@@ -378,6 +380,7 @@ export class RdioScannerService implements OnDestroy {
                 map: this.livefeedMap,
                 queue: this.callQueue.length,
                 queueDuration: this.callQueueDuration,
+                queuedCalls: this.callQueue,
             });
         }
     }
@@ -508,6 +511,10 @@ export class RdioScannerService implements OnDestroy {
             ? this.getPlaybackQueueDuration()
             : this.callQueueDuration;
 
+        const queuedCalls = this.livefeedMode === RdioScannerLivefeedMode.Playback
+            ? this.playbackList?.results  // TODO(zk): sort
+            : this.callQueue;
+
         const arrayBuffer = new ArrayBuffer(this.call.audio.data.length);
         const arrayBufferView = new Uint8Array(arrayBuffer);
 
@@ -543,7 +550,7 @@ export class RdioScannerService implements OnDestroy {
                 }
             });
         }, () => {
-            this.event.emit({ call: this.call, queue, queueDuration });
+            this.event.emit({ call: this.call, queue, queuedCalls, queueDuration });
 
             this.skip({ delay: false });
         });
@@ -591,10 +598,12 @@ export class RdioScannerService implements OnDestroy {
                     queue: this.callQueue.length,
                     queueDuration: this.callQueueDuration,
                     queuedCall: !options?.priority ? call : undefined,
+                    queuedCalls: this.callQueue,
                   }
                 : {
                     queue: this.getPlaybackQueueCount(),
                     queueDuration: this.getPlaybackQueueDuration(),
+                    queuedCalls: this.playbackList?.results,  // TODO(zk): sort
                   };
 
             this.event.emit(evt);
@@ -767,6 +776,7 @@ export class RdioScannerService implements OnDestroy {
                 map: this.livefeedMap,
                 queue: this.callQueue.length,
                 queueDuration: this.callQueueDuration,
+                queuedCalls: this.callQueue,
             });
         }
     }

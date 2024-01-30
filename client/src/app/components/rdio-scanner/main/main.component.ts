@@ -492,8 +492,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                     this.callHistory.unshift(this.call);
                 }
 
-                this.queuedCalls = this.queuedCalls.filter((call: RdioScannerCall) => call?.id !== this.call?.id);
-                this.queuedCalls$.next(this.queuedCalls);
+                // this.queuedCalls = this.queuedCalls.filter((call: RdioScannerCall) => call?.id !== this.call?.id);
+                // this.queuedCalls$.next(this.queuedCalls);
 
                 this.updateDimmer();
             }
@@ -575,9 +575,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
             this.callQueueDuration = event.queueDuration || 0;
         }
 
-        if (event.queuedCall) {
-            this.queuedCalls.push(event.queuedCall);
-            this.queuedCalls$.next(this.queuedCalls);
+        if (event.queuedCalls) {
+            this.queuedCalls$.next(event.queuedCalls);
         }
 
         if ('time' in event && typeof event.time === 'number') {

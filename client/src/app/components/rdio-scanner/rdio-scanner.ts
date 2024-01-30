@@ -126,6 +126,7 @@ export interface RdioScannerEvent {
     queue?: number;
     queueDuration?: number;
     queuedCall?: RdioScannerCall;
+    queuedCalls?: RdioScannerCall[];
     time?: number;
     tooMany?: boolean;
     unitsIndex?: RdioScannerUnitsIndex;
