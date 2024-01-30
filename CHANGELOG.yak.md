@@ -12,6 +12,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Add skip/replay unit keyboard shortcuts (Shift+Left/Right) to seek units within calls
 - Show talkgroup/duration of next queued calls next to LED on main display
 - Underline active unit of current call in playback history
+- Show elapsed timer on Live Feed button (just for online mode)
 
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03

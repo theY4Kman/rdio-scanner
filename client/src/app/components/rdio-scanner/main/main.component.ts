@@ -102,6 +102,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     livefeedOffline = true;
     livefeedOnline = false;
     livefeedPaused = false;
+
+    livefeedOnlineAt: Date | undefined;
+    livefeedOnlineSeconds$ = new BehaviorSubject<number>(0);
+
     livefeedPausedAt: Date | undefined;
     livefeedPausedSeconds$ = new BehaviorSubject<number>(0);
 
@@ -152,6 +156,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
     private clockTimer: Subscription | undefined;
 
+    private livefeedOnlineDurationTimer: Subscription | undefined;
     private pausedDurationTimer: Subscription | undefined;
 
     private config: RdioScannerConfig | undefined;
@@ -596,6 +601,12 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
             this.playbackMode = event.livefeedMode === RdioScannerLivefeedMode.Playback;
 
+            if (this.livefeedOnline) {
+                this.startLivefeedOnlineDurationTimer();
+            } else {
+                this.stopLivefeedOnlineDurationTimer();
+            }
+
             return;
         }
 
@@ -662,6 +673,25 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
     isActiveCall(call?: RdioScannerCall): boolean {
         return this.call?.id != null && this.call.id === call?.id;
+    }
+
+    private startLivefeedOnlineDurationTimer(): void {
+        this.livefeedOnlineAt = new Date();
+
+        this.livefeedOnlineDurationTimer?.unsubscribe();
+        this.livefeedOnlineDurationTimer = undefined;
+
+        this.livefeedOnlineDurationTimer = interval(1000).subscribe(() => {
+            const livefeedOnlineDuration = this.livefeedOnlineAt ? (Date.now() - this.livefeedOnlineAt.getTime()) / 1000 : 0;
+            this.livefeedOnlineSeconds$.next(Math.floor(livefeedOnlineDuration));
+        });
+    }
+
+    private stopLivefeedOnlineDurationTimer(): void {
+        this.livefeedOnlineAt = undefined;
+        this.livefeedOnlineDurationTimer?.unsubscribe();
+        this.livefeedOnlineDurationTimer = undefined;
+        this.livefeedOnlineSeconds$.next(0);
     }
 
     private startPausedDurationTimer(): void {
