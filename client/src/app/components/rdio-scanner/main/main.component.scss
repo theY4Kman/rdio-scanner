@@ -70,10 +70,13 @@ $led-yellow: rgb(255, 234, 0);
     }
   }
 
-  * {
-    overflow: hidden;
+  > * {
     text-overflow: clip;
     white-space: nowrap;
+
+    &:not(.overflow) {
+      overflow: hidden;
+    }
   }
 
   .rdio-header {
@@ -106,23 +109,40 @@ $led-yellow: rgb(255, 234, 0);
   }
 
   .units {
-    > span {
-      display: inline-block;
-      width: 8rem;
-      text-align: center;
-      text-overflow: ellipsis;
+    position: relative;
+    width: 25rem;
+    height: 3rem;  // guesstimate
+    overflow-x: hidden;  // don't show units scrolled past edges
 
-      &.active {
-        font-weight: bold;
-        width: 9rem;
+    .wrapper {
+      position: absolute;
+      left: 0;
+      transition: left 100ms;
+
+      > .unit {
+        display: inline-block;
+        width: 8rem;
+        text-align: center;
+        text-overflow: ellipsis;
+
+        .meta {
+          font-size: 12px;
+          height: 14px;
+        }
+
+        &.active {
+          font-weight: bold;
+          width: 9rem;
+
+          .label {
+            font-size: 1.2em
+          }
+
+          .meta {
+            font-size: 1.1em
+          }
+        }
       }
-    }
-
-    &.labels > .active {
-      font-size: 1.2em;
-    }
-    &.meta > .active {
-      font-size: 1.1em;
     }
   }
 

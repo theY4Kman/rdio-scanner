@@ -57,56 +57,66 @@
             <span>TGID: {{ callTalkgroupId || 0 }}</span>
         </div>
     </div>
-    <div class="row">
+    <div class="row overflow">
         <div>
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
-          <span *ngIf="call" class="units labels">
-            <span class="prev">
-              <rdio-scanner-call-source *ngIf="callSourceIndex >= 1" [call]="call" [source]="call.sources?.[callSourceIndex - 1]"></rdio-scanner-call-source>
-            </span>
-            <span class="active">
-              <rdio-scanner-call-source [call]="call" [source]="callSource"></rdio-scanner-call-source>
-            </span>
-            <span class="next">
-              <rdio-scanner-call-source *ngIf="callSourceIndex < callNumSources - 1" [call]="call" [source]="call.sources?.[callSourceIndex + 1]"></rdio-scanner-call-source>
-            </span>
-          </span>
+          <div *ngIf="call" class="units labels">
+            <div
+              class="wrapper"
+              [ngStyle]="{ left: -(callTime / callDuration) * (callNumSources * 8) + 15 + 'rem' }"
+            >
+              <div
+                *ngFor="let source of call.sources; index as sourceIndex"
+                class="unit"
+                [ngClass]="{ 'active': isActiveCall(call) && callSourceIndex === sourceIndex }"
+              >
+                <div class="label">
+                  <rdio-scanner-call-source [call]="call" [source]="source"></rdio-scanner-call-source>
+                </div>
+                <div class="meta" (click)="seekToSource(call, source)">
+                  [{{ sourceIndex + 1 }}/{{ callNumSources }}]
+                  {{ (call.sources?.[sourceIndex + 1]?.pos ?? callDuration) - (source.pos ?? 0) | duration }}s
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
     </div>
     <div class="row small">
-        <div>
-            <div *ngIf="tempAvoid">
-                <span class="flag" [ngClass]="{ flagged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
-            </div>
-            <div *ngIf="avoided">
-                <span class="flag" [ngClass]="{ flagged: avoided }">AVOID</span>
-            </div>
-            <div *ngIf="patched">
-                <span class="flag" [ngClass]="{ flagged: patched }">PATCH</span>
-            </div>
+      <div>
+        <div *ngIf="tempAvoid">
+          <span class="flag" [ngClass]="{ flagged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
         </div>
-        <div>
-          <span *ngIf="call" class="units meta">
-            <span class="prev" (click)="seekToSource(call, call.sources?.[callSourceIndex - 1])">
-              <span *ngIf="callSourceIndex >= 1">
-                [{{ callSourceIndex }}/{{ callNumSources }}]
-                {{ (call.sources?.[callSourceIndex]?.pos ?? 0) - (call.sources?.[callSourceIndex - 1]?.pos ?? 0) | duration }}s
-              </span>
-            </span>
-            <span class="active" (click)="seekToSource(call, call.sources?.[callSourceIndex])">
-              [{{ callSourceIndex + 1 }}/{{ callNumSources }}]
-              {{ (call.sources?.[callSourceIndex + 1]?.pos ?? callDuration) - (call.sources?.[callSourceIndex]?.pos ?? 0) | duration }}s
-            </span>
-            <span class="next">
-              <span *ngIf="callSourceIndex < callNumSources - 1" (click)="seekToSource(call, call.sources?.[callSourceIndex + 1])">
-                [{{ callSourceIndex + 2 }}/{{ callNumSources }}]
-                {{ (call.sources?.[callSourceIndex + 2]?.pos ?? callDuration) - (call.sources?.[callSourceIndex + 1]?.pos ?? 0) | duration }}s
-              </span>
-            </span>
-          </span>
+        <div *ngIf="avoided">
+          <span class="flag" [ngClass]="{ flagged: avoided }">AVOID</span>
         </div>
+        <div *ngIf="patched">
+          <span class="flag" [ngClass]="{ flagged: patched }">PATCH</span>
+        </div>
+      </div>
+      <div></div>
+<!--        <div>-->
+<!--          <span *ngIf="call" class="units meta">-->
+<!--            <span class="prev" (click)="seekToSource(call, call.sources?.[callSourceIndex - 1])">-->
+<!--              <span *ngIf="callSourceIndex >= 1">-->
+<!--                [{{ callSourceIndex }}/{{ callNumSources }}]-->
+<!--                {{ (call.sources?.[callSourceIndex]?.pos ?? 0) - (call.sources?.[callSourceIndex - 1]?.pos ?? 0) | duration }}s-->
+<!--              </span>-->
+<!--            </span>-->
+<!--            <span class="active" (click)="seekToSource(call, call.sources?.[callSourceIndex])">-->
+<!--              [{{ callSourceIndex + 1 }}/{{ callNumSources }}]-->
+<!--              {{ (call.sources?.[callSourceIndex + 1]?.pos ?? callDuration) - (call.sources?.[callSourceIndex]?.pos ?? 0) | duration }}s-->
+<!--            </span>-->
+<!--            <span class="next">-->
+<!--              <span *ngIf="callSourceIndex < callNumSources - 1" (click)="seekToSource(call, call.sources?.[callSourceIndex + 1])">-->
+<!--                [{{ callSourceIndex + 2 }}/{{ callNumSources }}]-->
+<!--                {{ (call.sources?.[callSourceIndex + 2]?.pos ?? callDuration) - (call.sources?.[callSourceIndex + 1]?.pos ?? 0) | duration }}s-->
+<!--              </span>-->
+<!--            </span>-->
+<!--          </span>-->
+<!--        </div>-->
     </div>
     <div class="wrapper">
         <div class="auth" [ngClass]="{ visible: auth }">
