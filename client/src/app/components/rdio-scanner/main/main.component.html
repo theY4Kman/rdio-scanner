@@ -63,21 +63,35 @@
         </div>
         <div>
           <div *ngIf="call" class="units labels">
+            <div class="active-needle">▼</div>
+            <div class="call-length">
+              <ng-container *ngFor="let source of call.sources; index as sourceIndex">
+                <div
+                  class="unit-marker"
+                  *ngIf="source.pos != null"
+                  [ngStyle]="{ left: (source.pos / callDuration) * 100 + '%', width: getSourceDuration(call, sourceIndex) / callDuration * 100 + '%' }"
+                  [ngClass]="{ 'known': source.label != null, 'unknown': source.label == null, 'prev': sourceIndex < callSourceIndex, 'active': sourceIndex === callSourceIndex, 'next': sourceIndex > callSourceIndex }"
+                  (click)="seekToSource(call, source)"
+                ></div>
+              </ng-container>
+              <div class="call-pos" [ngStyle]="{ width: (callTime / callDuration) * 100 + '%' }"></div>
+            </div>
             <div
               class="wrapper"
-              [ngStyle]="{ left: -(callTime / callDuration) * (callNumSources * 8) + 15 + 'rem' }"
+              [ngStyle]="{ left: -(callSourcesDisplayInfo[callSourceIndex].offsetRem + (callSourcePos / callSourceDuration) * callSourcesDisplayInfo[callSourceIndex].widthRem) + 16 + 'rem' }"
             >
               <div
                 *ngFor="let source of call.sources; index as sourceIndex"
                 class="unit"
-                [ngClass]="{ 'active': isActiveCall(call) && callSourceIndex === sourceIndex }"
+                [ngClass]="{ 'active': callSourceIndex === sourceIndex }"
+                [ngStyle]="{ 'width': callSourcesDisplayInfo[sourceIndex].widthRem + 'rem', paddingLeft: (sourceIndex === callSourceIndex ? (callSourcePos / callSourceDuration) : +(sourceIndex < callSourceIndex)) * callSourcesDisplayInfo[sourceIndex].scrollRem + 'rem' }"
               >
                 <div class="label">
                   <rdio-scanner-call-source [call]="call" [source]="source"></rdio-scanner-call-source>
                 </div>
                 <div class="meta" (click)="seekToSource(call, source)">
                   [{{ sourceIndex + 1 }}/{{ callNumSources }}]
-                  {{ (call.sources?.[sourceIndex + 1]?.pos ?? callDuration) - (source.pos ?? 0) | duration }}s
+                  {{ getSourceDuration(call, sourceIndex) | duration }}s
                 </div>
               </div>
             </div>
@@ -97,27 +111,11 @@
         </div>
       </div>
       <div></div>
-<!--        <div>-->
-<!--          <span *ngIf="call" class="units meta">-->
-<!--            <span class="prev" (click)="seekToSource(call, call.sources?.[callSourceIndex - 1])">-->
-<!--              <span *ngIf="callSourceIndex >= 1">-->
-<!--                [{{ callSourceIndex }}/{{ callNumSources }}]-->
-<!--                {{ (call.sources?.[callSourceIndex]?.pos ?? 0) - (call.sources?.[callSourceIndex - 1]?.pos ?? 0) | duration }}s-->
-<!--              </span>-->
-<!--            </span>-->
-<!--            <span class="active" (click)="seekToSource(call, call.sources?.[callSourceIndex])">-->
-<!--              [{{ callSourceIndex + 1 }}/{{ callNumSources }}]-->
-<!--              {{ (call.sources?.[callSourceIndex + 1]?.pos ?? callDuration) - (call.sources?.[callSourceIndex]?.pos ?? 0) | duration }}s-->
-<!--            </span>-->
-<!--            <span class="next">-->
-<!--              <span *ngIf="callSourceIndex < callNumSources - 1" (click)="seekToSource(call, call.sources?.[callSourceIndex + 1])">-->
-<!--                [{{ callSourceIndex + 2 }}/{{ callNumSources }}]-->
-<!--                {{ (call.sources?.[callSourceIndex + 2]?.pos ?? callDuration) - (call.sources?.[callSourceIndex + 1]?.pos ?? 0) | duration }}s-->
-<!--              </span>-->
-<!--            </span>-->
-<!--          </span>-->
-<!--        </div>-->
     </div>
+
+    <!-- spacing -->
+    <div class="row small"></div>
+
     <div class="wrapper">
         <div class="auth" [ngClass]="{ visible: auth }">
             <form class="mat-elevation-z8" autocomplete="off" [formGroup]="authForm" (ngSubmit)="authenticate()">

@@ -13,7 +13,8 @@ I will attempt to retain semantic versioning on the fork version.
 - Show talkgroup/duration of next queued calls next to LED on main display
 - Underline active unit of current call in playback history
 - Show elapsed timer on Live Feed button (just for online mode)
-- Show units display as animated, scrolling marquee (first pass — the active unit should definitely be "sticky", and the lengths of units should reflect the duration of the source)
+- Show units display as animated, scrolling marquee (still needs polish)
+- Add call seek bar, showing animated progress through duration of call, with markers for each unit
 
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03

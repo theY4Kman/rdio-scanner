@@ -109,21 +109,85 @@ $led-yellow: rgb(255, 234, 0);
   }
 
   .units {
+    $needle-height: 1.3rem;
+
     position: relative;
-    width: 25rem;
-    height: 3rem;  // guesstimate
+    width: 30rem;
+    height: 3rem + $needle-height;  // guesstimate
     overflow-x: hidden;  // don't show units scrolled past edges
+    margin-top: -1rem;  // add space for needle
+
+    .active-needle {
+      // place needle at center of display
+      position: absolute;
+      left: 50%;
+      top: 8px;
+      -webkit-text-stroke-width: 1px;
+      -webkit-text-stroke-color: white;
+    }
+
+    .call-length {
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 100%;
+      height: 3px;
+      background: gray;
+      border-radius: 4px;
+
+      .call-pos {
+        position: absolute;
+        left: 0;
+        width: 0;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 4px;
+
+        // Allow click events to reach underlying unit markers
+        pointer-events: none;
+
+        transition: width 100ms;
+      }
+
+      .unit-marker {
+        position: absolute;
+        top: 0;
+        width: 1px;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid black;
+        cursor: pointer;
+
+        &.known { background: darken(rgb(0, 230, 118), 20); }
+        &.unknown { background: darken(rgb(255, 152, 0), 20); }
+
+        &.prev { opacity: 0.3; }
+        &.next { opacity: 0.6; }
+
+        &.active {
+          opacity: 0.95;
+          top: -1px;
+          height: 4px;
+        }
+
+        &:hover {
+          opacity: 1;
+          border-width: 2px;
+        }
+      }
+    }
 
     .wrapper {
       position: absolute;
       left: 0;
+      margin-top: $needle-height;
       transition: left 100ms;
 
       > .unit {
         display: inline-block;
         width: 8rem;
-        text-align: center;
         text-overflow: ellipsis;
+        transition: padding-left 100ms;
 
         .meta {
           font-size: 12px;

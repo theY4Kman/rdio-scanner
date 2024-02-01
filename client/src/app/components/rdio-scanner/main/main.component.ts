@@ -46,7 +46,12 @@ import {
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 import { RdioScannerAdminService } from '../admin/admin.service';
-import { first } from 'rxjs/operators';
+
+type CallSourceDisplayInfo = {
+    offsetRem: number;
+    widthRem: number;
+    scrollRem: number;
+};
 
 @Component({
     selector: 'rdio-scanner-main',
@@ -57,6 +62,8 @@ import { first } from 'rxjs/operators';
     templateUrl: './main.component.html',
 })
 export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewInit {
+    readonly Math = Math;
+
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
 
@@ -77,6 +84,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     callSource: RdioScannerCallSource | undefined;
     callNumSources = 0;
     callSourceIndex = 0;
+    callSourcePos = 0;
+    callSourceDuration = 0;
+    callSourcesDisplayInfo: CallSourceDisplayInfo[] = [];
+    callSourcesTotalRem = 0;
     callSpike = '0';
     callSystem = 'System';
     callTag = 'Tag';
@@ -675,6 +686,23 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         return this.call?.id != null && this.call.id === call?.id;
     }
 
+    getSourceDuration(call: RdioScannerCall, callSourceIndex?: number): number {
+        if (callSourceIndex == null) {
+            return call.audioDuration ?? 0;
+        }
+
+        const source = call.sources?.[callSourceIndex];
+        const sourcePos = source?.pos;
+        if (sourcePos == null) {
+            return 0;
+        }
+
+        const nextSource = call.sources?.[callSourceIndex + 1];
+        const nextPos = nextSource?.pos ?? call.audioDuration ?? 0;
+
+        return nextPos - sourcePos;
+    }
+
     private startLivefeedOnlineDurationTimer(): void {
         this.livefeedOnlineAt = new Date();
 
@@ -840,6 +868,28 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
                 const source = this.call.sources.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
                 this.callSource = source;
                 this.callSourceIndex = this.call.sources.indexOf(source);
+                this.callSourcePos = time - (source.pos || 0);
+                this.callSourceDuration = this.getSourceDuration(this.call, this.callSourceIndex);
+
+                this.callSourcesTotalRem = 0;
+                this.callSourcesDisplayInfo = this.call.sources.map((_source, sourceIndex) => {
+                    const widthRem = Math.max(8, this.getSourceDuration(this.call!!, sourceIndex) + 5);
+                    this.callSourcesTotalRem += widthRem;
+
+                    const scrollRem = Math.max(0, widthRem - 8)
+
+                    return {
+                        offsetRem: 0,
+                        widthRem,
+                        scrollRem,
+                    };
+                });
+                this.callSourcesDisplayInfo.forEach((info, sourceIndex) => {
+                    const prevInfo = this.callSourcesDisplayInfo[sourceIndex - 1];
+                    if (prevInfo) {
+                        info.offsetRem = prevInfo.offsetRem + prevInfo.widthRem;
+                    }
+                });
 
                 if (typeof source.src === 'number' && this.unitsIndex != null) {
                     this.callUnit = this.unitsIndex[this.call.system]?.[source.src] ?? `${source.src}`;
