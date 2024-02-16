@@ -93,6 +93,29 @@ func (system *System) FromMap(m map[string]any) *System {
 	return system
 }
 
+func (system *System) FromMapPatch(m map[string]any) *System {
+	var (
+		mTalkgroups = m["talkgroups"]
+		mUnits      = m["units"]
+	)
+
+	delete(m, "talkgroups")
+	delete(m, "units")
+	system.FromMap(m)
+
+	switch v := mTalkgroups.(type) {
+	case []any:
+		system.Talkgroups.FromMapPatch(v)
+	}
+
+	switch v := mUnits.(type) {
+	case []any:
+		system.Units.FromMapPatch(v)
+	}
+
+	return system
+}
+
 type SystemMap map[string]any
 
 type Systems struct {
@@ -125,6 +148,38 @@ func (systems *Systems) FromMap(f []any) *Systems {
 	return systems
 }
 
+func (systems *Systems) FromMapPatch(f []any) *Systems {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	for _, r := range f {
+		switch m := r.(type) {
+		case map[string]any:
+			var (
+				mId      = m["id"]
+				systemId uint
+			)
+
+			switch v := mId.(type) {
+			case float64:
+				systemId = uint(v)
+			default:
+				continue
+			}
+
+			system, ok := systems.getSystem(systemId)
+			if !ok {
+				system = NewSystem()
+				systems.List = append(systems.List, system)
+			}
+
+			system.FromMapPatch(m)
+		}
+	}
+
+	return systems
+}
+
 func (systems *Systems) GetNewSystemId() uint {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
@@ -141,10 +196,7 @@ NextId:
 	return 0
 }
 
-func (systems *Systems) GetSystem(f any) (system *System, ok bool) {
-	systems.mutex.Lock()
-	defer systems.mutex.Unlock()
-
+func (systems *Systems) getSystem(f any) (system *System, ok bool) {
 	switch v := f.(type) {
 	case uint:
 		for _, system := range systems.List {
@@ -160,6 +212,13 @@ func (systems *Systems) GetSystem(f any) (system *System, ok bool) {
 		}
 	}
 	return nil, false
+}
+
+func (systems *Systems) GetSystem(f any) (system *System, ok bool) {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	return systems.getSystem(f)
 }
 
 func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *Tags, sortTalkgroups bool) SystemsMap {

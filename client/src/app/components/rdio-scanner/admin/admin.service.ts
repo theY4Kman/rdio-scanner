@@ -364,12 +364,12 @@ export class RdioScannerAdminService implements OnDestroy {
         }
     }
 
-    async saveConfig(config: Config): Promise<Config> {
+    async _uploadConfig(method: string, config: Config): Promise<Config> {
         try {
-            const res = await firstValueFrom(this.ngHttpClient.put<{ config: Config }>(
+            const res = await firstValueFrom(this.ngHttpClient.request<{ config: Config }>(
+                method,
                 this.getUrl(url.config),
-                config,
-                { headers: this.getHeaders(), responseType: 'json' },
+                { body: config, headers: this.getHeaders(), responseType: 'json' },
             ));
 
             return res.config;
@@ -381,43 +381,35 @@ export class RdioScannerAdminService implements OnDestroy {
         }
     }
 
-    async setUnitLabel(systemId: number, unitId: number, label: string): Promise<boolean> {
-        const config = await this.getConfig();
+    async saveConfig(config: Config): Promise<Config> {
+        return await this._uploadConfig('PUT', config);
+    }
 
-        const system = config.systems?.find((s) => s.id === systemId);
-        if (!system) {
-            return true;
+    async patchConfig(config: Config): Promise<Config> {
+        return await this._uploadConfig('PATCH', config);
+    }
+
+    async setUnitLabel(systemId: number, unitId: number, label: string | undefined): Promise<boolean> {
+        const configPatch: Config = {
+            systems: [
+                {
+                    id: systemId,
+                    units: [
+                        {
+                            id: unitId,
+                            label,
+                        }
+                    ]
+                }
+            ]
         }
-
-        const unit = system.units?.find((u) => u.id === unitId);
-
-        if (unit) {
-            unit.label = label;
-        } else {
-            if (!system.units) {
-                system.units = [];
-            }
-            system.units.push({ id: unitId, label, order: system.units.length });
-        }
-
-        await this.saveConfig(config);
+        await this.patchConfig(configPatch);
 
         return true;
     }
 
     async deleteUnitLabel(systemId: number, unitId: number): Promise<boolean> {
-        const config = await this.getConfig();
-
-        const system = config.systems?.find((s) => s.id === systemId);
-        if (!system || !system.units) {
-            return false;
-        }
-
-        system.units = system.units.filter((u) => u.id !== unitId);
-
-        await this.saveConfig(config);
-
-        return true;
+        return this.setUnitLabel(systemId, unitId, undefined);
     }
 
     newAccessForm(access?: Access): FormGroup {

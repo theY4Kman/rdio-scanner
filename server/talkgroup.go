@@ -123,10 +123,34 @@ func (talkgroups *Talkgroups) FromMap(f []any) *Talkgroups {
 	return talkgroups
 }
 
+func (talkgroups *Talkgroups) FromMapPatch(f []any) *Talkgroups {
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
+
+	for _, r := range f {
+		switch m := r.(type) {
+		case map[string]any:
+			talkgroup, ok := talkgroups.getTalkgroup(m["id"])
+			if !ok {
+				talkgroup = &Talkgroup{}
+				talkgroups.List = append(talkgroups.List, talkgroup)
+			}
+
+			talkgroup.FromMap(m)
+		}
+	}
+
+	return talkgroups
+}
+
 func (talkgroups *Talkgroups) GetTalkgroup(f any) (system *Talkgroup, ok bool) {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
+	return talkgroups.getTalkgroup(f)
+}
+
+func (talkgroups *Talkgroups) getTalkgroup(f any) (system *Talkgroup, ok bool) {
 	switch v := f.(type) {
 	case uint:
 		for _, talkgroup := range talkgroups.List {

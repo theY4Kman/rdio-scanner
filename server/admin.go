@@ -141,153 +141,144 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1000, ""))
 		}()
+		return
 
-	} else {
-		logError := func(err error) {
-			admin.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("admin.confighandler.put: %s", err.Error()))
-		}
+	}
 
-		t := admin.GetAuthorization(r)
-		if !admin.ValidateToken(t) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
+	t := admin.GetAuthorization(r)
+	if !admin.ValidateToken(t) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 
-		switch r.Method {
-		case http.MethodGet:
-			admin.SendConfig(w)
+	switch r.Method {
+	case http.MethodGet:
+		admin.SendConfig(w)
 
-		case http.MethodPut:
-			m := map[string]any{}
-			err := json.NewDecoder(r.Body).Decode(&m)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			admin.mutex.Lock()
-			defer admin.mutex.Unlock()
-
-			admin.Controller.Dirwatches.Stop()
-
+	case http.MethodPut:
+		admin.ApplyConfigChangeRequest(w, r, func(m map[string]any) error {
 			switch v := m["access"].(type) {
 			case []any:
 				admin.Controller.Accesses.FromMap(v)
-				err := admin.Controller.Accesses.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Accesses.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Accesses); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["apiKeys"].(type) {
 			case []any:
 				admin.Controller.Apikeys.FromMap(v)
-				err = admin.Controller.Apikeys.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Apikeys.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Apikeys); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["dirWatch"].(type) {
 			case []any:
 				admin.Controller.Dirwatches.FromMap(v)
-				err = admin.Controller.Dirwatches.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Dirwatches.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Dirwatches); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["downstreams"].(type) {
 			case []any:
 				admin.Controller.Downstreams.FromMap(v)
-				err = admin.Controller.Downstreams.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Downstreams.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Downstreams); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["groups"].(type) {
 			case []any:
 				admin.Controller.Groups.FromMap(v)
-				err = admin.Controller.Groups.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Groups.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Groups); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["options"].(type) {
 			case map[string]any:
 				admin.Controller.Options.FromMap(v)
-				err = admin.Controller.Options.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
+				if err := admin.WriteReadResource(admin.Controller.Options); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["systems"].(type) {
 			case []any:
 				admin.Controller.Systems.FromMap(v)
-				err = admin.Controller.Systems.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Systems.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Systems); err != nil {
+					return err
 				}
 			}
 
 			switch v := m["tags"].(type) {
 			case []any:
 				admin.Controller.Tags.FromMap(v)
-				err = admin.Controller.Tags.Write(admin.Controller.Database)
-				if err != nil {
-					logError(err)
-				} else {
-					err = admin.Controller.Tags.Read(admin.Controller.Database)
-					if err != nil {
-						logError(err)
-					}
+				if err := admin.WriteReadResource(admin.Controller.Tags); err != nil {
+					return err
 				}
 			}
 
-			admin.Controller.EmitConfig()
-			admin.Controller.Dirwatches.Start(admin.Controller)
+			return nil
+		})
 
-			admin.SendConfig(w)
+	case http.MethodPatch:
+		admin.ApplyConfigChangeRequest(w, r, func(m map[string]any) error {
+			switch v := m["systems"].(type) {
+			case []any:
+				admin.Controller.Systems.FromMapPatch(v)
+				if err := admin.WriteReadResource(admin.Controller.Systems); err != nil {
+					return err
+				}
+			}
 
-			admin.Controller.Logs.LogEvent(LogLevelWarn, "configuration changed")
+			return nil
+		})
 
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+type configChangeRequestHandler func(m map[string]any) error
+
+func (admin *Admin) ApplyConfigChangeRequest(w http.ResponseWriter, r *http.Request, handler configChangeRequestHandler) {
+	m := map[string]any{}
+	err := json.NewDecoder(r.Body).Decode(&m)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	admin.mutex.Lock()
+	defer admin.mutex.Unlock()
+
+	admin.Controller.Dirwatches.Stop()
+
+	if err := handler(m); err != nil {
+		admin.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("admin.confighandler.%s: %s", strings.ToLower(r.Method), err.Error()))
+	}
+
+	admin.Controller.EmitConfig()
+	admin.Controller.Dirwatches.Start(admin.Controller)
+
+	admin.SendConfig(w)
+
+	admin.Controller.Logs.LogEvent(LogLevelWarn, "configuration changed")
+}
+
+func (admin *Admin) WriteReadResource(resource PersistedResource) error {
+	if err := resource.Write(admin.Controller.Database); err != nil {
+		return err
+	}
+
+	if err := resource.Read(admin.Controller.Database); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (admin *Admin) GetAuthorization(r *http.Request) string {

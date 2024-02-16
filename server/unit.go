@@ -96,15 +96,88 @@ func (units *Units) FromMap(f []any) *Units {
 	return units
 }
 
-func (u *Units) Merge(units *Units) bool {
+func (units *Units) FromMapPatch(f []any) *Units {
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
+
+	for _, r := range f {
+		switch m := r.(type) {
+		case map[string]any:
+			isDeleting := m["label"] == nil
+
+			unit, ok := units.getUnit(m["id"])
+			if !ok {
+				if isDeleting {
+					continue
+				}
+
+				unit = &Unit{}
+				units.List = append(units.List, unit)
+			}
+
+			if isDeleting {
+				units.deleteUnit(unit)
+				continue
+			}
+
+			unit.FromMap(m)
+		}
+	}
+
+	return units
+}
+
+func (units *Units) GetUnit(f any) (unit *Unit, ok bool) {
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
+
+	return units.getUnit(f)
+}
+
+func (units *Units) getUnit(f any) (unit *Unit, ok bool) {
+	switch f.(type) {
+	case float64:
+		f = uint(f.(float64))
+	}
+
+	switch v := f.(type) {
+	case uint:
+		for _, unit := range units.List {
+			if unit.Id == v {
+				return unit, true
+			}
+		}
+	case string:
+		for _, unit := range units.List {
+			if unit.Label == v {
+				return unit, true
+			}
+		}
+	}
+
+	return nil, false
+}
+
+func (units *Units) deleteUnit(unit *Unit) bool {
+	for i, u := range units.List {
+		if u == unit {
+			units.List = append(units.List[:i], units.List[i+1:]...)
+			return true
+		}
+	}
+
+	return false
+}
+
+func (units *Units) Merge(newUnits *Units) bool {
 	merged := false
 
-	if units != nil {
-		u.mutex.Lock()
-		defer u.mutex.Unlock()
+	if newUnits != nil {
+		units.mutex.Lock()
+		defer units.mutex.Unlock()
 
-		for _, v := range units.List {
-			if _, added := u.Add(v.Id, v.Label); added {
+		for _, v := range newUnits.List {
+			if _, added := units.Add(v.Id, v.Label); added {
 				merged = added
 			}
 		}

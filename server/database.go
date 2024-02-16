@@ -33,6 +33,11 @@ type Database struct {
 	Sql            *sql.DB
 }
 
+type PersistedResource interface {
+	Read(db *Database) error
+	Write(db *Database) error
+}
+
 func NewDatabase(config *Config) *Database {
 	var err error
 
