@@ -135,6 +135,9 @@ func (db *Database) migrate() error {
 	if err == nil {
 		err = db.migration20220418033700(verbose)
 	}
+	if err == nil {
+		err = db.migration20240226015553(verbose)
+	}
 
 	return err
 }
@@ -479,6 +482,47 @@ func (db *Database) migration20220418033700(verbose bool) error {
 		}
 	}
 	return db.migrateWithSchema("20220418033700-v6.1.0-add-duration-column", queries, verbose)
+}
+
+func (db *Database) migration20240226015553(verbose bool) error {
+	var queries []string
+	if db.Config.DbType != DbTypeSqlite {
+		log.Println("Migration 20240226015553 has been written only for SQLite. It may fail on other databases.")
+	}
+	queries = []string{
+		`CREATE TABLE rdioScannerUnitLabelHistory (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			createdAt DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			unitId INTEGER NOT NULL,
+			label VARCHAR(255),
+			FOREIGN KEY (unitId) REFERENCES rdioScannerUnits(_id)
+		);`,
+		`CREATE TABLE rdioScannerUnitTags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+			label VARCHAR(255) UNIQUE NOT NULL,
+			description TEXT,
+			color VARCHAR(255) DEFAULT '#000000' NOT NULL
+		);`,
+		`CREATE TABLE rdioScannerUnitTagApplications (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			createdAt DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			unitId INTEGER NOT NULL,
+			tagId INTEGER NOT NULL,
+			FOREIGN KEY (unitId) REFERENCES rdioScannerUnits(_id),
+			FOREIGN KEY (tagId) REFERENCES rdioScannerUnitTags(id)
+		);`,
+		`CREATE TRIGGER IF NOT EXISTS rdioScannerUnits_onLabelChanged
+		AFTER UPDATE OF label ON rdioScannerUnits
+		FOR EACH ROW
+		WHEN NEW.label <> OLD.label
+		BEGIN
+			INSERT INTO rdioScannerUnitLabelHistory (unitId, label)
+			VALUES (OLD._id, OLD.label);
+		END;`,
+	}
+	return db.migrateWithSchema("20240226015553-v6.6.3-yak.0.0.1-", queries, verbose)
 }
 
 func (db *Database) prepareMigration() (bool, error) {
