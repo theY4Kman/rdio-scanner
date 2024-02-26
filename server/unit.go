@@ -230,10 +230,9 @@ func (units *Units) Read(db *Database, systemId uint) error {
 
 func (units *Units) Write(db *Database, systemId uint) error {
 	var (
-		count uint
-		err   error
-		ids   = []uint{}
-		rows  *sql.Rows
+		err  error
+		ids  = []uint{}
+		rows *sql.Rows
 	)
 
 	units.mutex.Lock()
@@ -283,16 +282,14 @@ func (units *Units) Write(db *Database, systemId uint) error {
 	}
 
 	for _, unit := range units.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
+		if _, err = db.Sql.Exec(
+			`
+				INSERT INTO rdioScannerUnits (id, label, "order", systemId)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT (id, systemId) DO UPDATE
+				SET label = EXCLUDED.label, "order" = EXCLUDED."order"
+			`,
+			unit.Id, unit.Label, unit.Order, systemId); err != nil {
 			break
 		}
 	}
