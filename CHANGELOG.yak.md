@@ -16,6 +16,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Show units display as animated, scrolling marquee (still needs polish)
 - Add call seek bar, showing animated progress through duration of call, with markers for each unit
 - Add config patch endpoint to server, enabling fast changes/deletes to units
+- Perform units config updates in bulk under transaction, for further speed
 
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03

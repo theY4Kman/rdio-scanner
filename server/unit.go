@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -269,32 +270,69 @@ func (units *Units) Write(db *Database, systemId uint) error {
 		return formatError(err)
 	}
 
+	ctx := context.Background()
+	tx, err := db.Sql.BeginTx(ctx, nil)
+	if err != nil {
+		return formatError(err)
+	}
+	defer tx.Rollback()
+
 	if len(ids) > 0 {
 		if b, err := json.Marshal(ids); err == nil {
 			s := string(b)
 			s = strings.ReplaceAll(s, "[", "(")
 			s = strings.ReplaceAll(s, "]", ")")
 			q := fmt.Sprintf("delete from `rdioScannerUnits` where `id` in %v and `systemId` = %v", s, systemId)
-			if _, err = db.Sql.Exec(q); err != nil {
+			if _, err = tx.ExecContext(ctx, q); err != nil {
 				return formatError(err)
 			}
 		}
 	}
 
+	// SQLite has a limit of 999 parameters per query. We use 990 to be safe.
+	maxParams := 990
+	args := make([]interface{}, 0, len(units.List)*4)
+	valuesRows := make([]string, 0, len(units.List))
+
+	emitUpsert := func() error {
+		if len(valuesRows) == 0 {
+			return nil
+		}
+
+		q := fmt.Sprintf(`
+			INSERT INTO rdioScannerUnits (id, label, "order", systemId)
+			VALUES %s
+			ON CONFLICT (id, systemId) DO UPDATE
+			SET label = EXCLUDED.label, "order" = EXCLUDED."order"
+		`, strings.Join(valuesRows, ","))
+
+		if _, err = tx.ExecContext(ctx, q, args...); err != nil {
+			return formatError(err)
+		}
+
+		args = args[:0]
+		valuesRows = valuesRows[:0]
+
+		return nil
+	}
+
 	for _, unit := range units.List {
-		if _, err = db.Sql.Exec(
-			`
-				INSERT INTO rdioScannerUnits (id, label, "order", systemId)
-				VALUES (?, ?, ?, ?)
-				ON CONFLICT (id, systemId) DO UPDATE
-				SET label = EXCLUDED.label, "order" = EXCLUDED."order"
-			`,
-			unit.Id, unit.Label, unit.Order, systemId); err != nil {
-			break
+		if len(args) >= maxParams {
+			if err := emitUpsert(); err != nil {
+				return err
+			}
+		}
+
+		args = append(args, unit.Id, unit.Label, unit.Order, systemId)
+		valuesRows = append(valuesRows, "(?, ?, ?, ?)")
+	}
+	if len(args) > 0 {
+		if err := emitUpsert(); err != nil {
+			return err
 		}
 	}
 
-	if err != nil {
+	if err = tx.Commit(); err != nil {
 		return formatError(err)
 	}
 
