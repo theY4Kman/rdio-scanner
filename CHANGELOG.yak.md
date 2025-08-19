@@ -21,6 +21,9 @@ I will attempt to retain semantic versioning on the fork version.
 - Reorder columns in call table to improve query performance of search
 - Show full date/time of call in search results, using title attribute
 
+### Fixed
+- Hide trailing "s" in duration col on search page if no row
+
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03
 ### Added
