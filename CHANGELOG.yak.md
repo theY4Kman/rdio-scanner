@@ -19,6 +19,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Perform units config updates in bulk under transaction, for further speed
 - Split off audio blobs to separate table, to improve query performance of search
 - Reorder columns in call table to improve query performance of search
+- Show full date/time of call in search results, using title attribute
 
 
 ## [6.6.3-yak.0.0.1] — 2024-01-03
