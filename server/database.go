@@ -101,42 +101,30 @@ func (db *Database) migrate() error {
 	)
 
 	verbose, err = db.prepareMigration()
+	if err != nil {
+		return err
+	}
 
-	if err == nil {
-		err = db.migration20191028144433(verbose)
+	migrations := []func(verbose bool) error{
+		db.migration20191028144433,
+		db.migration20191029092201,
+		db.migration20191126135515,
+		db.migration20191220093214,
+		db.migration20200123094105,
+		db.migration20200428132918,
+		db.migration20210115105958,
+		db.migration20210830092027,
+		db.migration20211202094819,
+		db.migration20220101070000,
+		db.migration20220418033700,
+		db.migration20240226015553,
+		db.migration20250414171018,
 	}
-	if err == nil {
-		err = db.migration20191029092201(verbose)
-	}
-	if err == nil {
-		err = db.migration20191126135515(verbose)
-	}
-	if err == nil {
-		err = db.migration20191220093214(verbose)
-	}
-	if err == nil {
-		err = db.migration20200123094105(verbose)
-	}
-	if err == nil {
-		err = db.migration20200428132918(verbose)
-	}
-	if err == nil {
-		err = db.migration20210115105958(verbose)
-	}
-	if err == nil {
-		err = db.migration20210830092027(verbose)
-	}
-	if err == nil {
-		err = db.migration20211202094819(verbose)
-	}
-	if err == nil {
-		err = db.migration20220101070000(verbose)
-	}
-	if err == nil {
-		err = db.migration20220418033700(verbose)
-	}
-	if err == nil {
-		err = db.migration20240226015553(verbose)
+
+	for _, migration := range migrations {
+		if err = migration(verbose); err != nil {
+			break
+		}
 	}
 
 	return err
@@ -513,6 +501,7 @@ func (db *Database) migration20240226015553(verbose bool) error {
 			FOREIGN KEY (unitId) REFERENCES rdioScannerUnits(_id),
 			FOREIGN KEY (tagId) REFERENCES rdioScannerUnitTags(id)
 		);`,
+		// language=sqlite
 		`CREATE TRIGGER IF NOT EXISTS rdioScannerUnits_onLabelChanged
 		AFTER UPDATE OF label ON rdioScannerUnits
 		FOR EACH ROW
@@ -523,6 +512,44 @@ func (db *Database) migration20240226015553(verbose bool) error {
 		END;`,
 	}
 	return db.migrateWithSchema("20240226015553-v6.6.3-yak.0.0.1-", queries, verbose)
+}
+
+func (db *Database) migration20250414171018(verbose bool) error {
+	var queries []string
+	if db.Config.DbType != DbTypeSqlite {
+		log.Println("Migration 20250414171018 has been written only for SQLite. It may fail on other databases.")
+	}
+	queries = []string{
+		`CREATE TABLE rdioScannerCalls2 (
+			id integer primary key autoincrement,
+			dateTime datetime not null,
+			frequency integer,
+			source integer,
+			system integer not null,
+			talkgroup integer not null,
+			audioDuration REAL DEFAULT 0,
+			frequencies text not null,
+			sources text not null,
+			patches text not null,
+			audioName varchar(255),
+			audioType varchar(255)
+		 )`,
+		`INSERT INTO rdioScannerCalls2 (id, dateTime, frequency, source, system, talkgroup, audioDuration, frequencies, sources, patches, audioName, audioType)
+         SELECT id, dateTime, frequency, source, system, talkgroup, audioDuration, frequencies, sources, patches, audioName, audioType
+         FROM rdioScannerCalls;`,
+		`CREATE TABLE rdioScannerCallAudio (
+			id INTEGER PRIMARY KEY,
+			audio LONGBLOB NOT NULL,
+			FOREIGN KEY (id) REFERENCES rdioScannerCalls2(id)
+		);`,
+		`INSERT INTO rdioScannerCallAudio (id, audio)
+		 SELECT id, audio
+		 FROM rdioScannerCalls;`,
+		`DROP TABLE rdioScannerCalls;`,
+		`ALTER TABLE rdioScannerCalls2 RENAME TO rdioScannerCalls;`,
+		"create index `rdio_scanner_calls_date_time_system_talkgroup` on `rdioScannerCalls` (`dateTime`, `system`, `talkgroup`)",
+	}
+	return db.migrateWithSchema("20240226015553-v6.6.3-yak.0.0.1-separate-audio-table", queries, verbose)
 }
 
 func (db *Database) prepareMigration() (bool, error) {

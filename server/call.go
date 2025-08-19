@@ -161,9 +161,22 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	call := Call{Id: id}
 
 	query := fmt.Sprintf(`
-		SELECT "audio", "audioName", "audioType", "audioDuration", "DateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup" 
-		from "rdioScannerCalls" 
-		where "id" = %v
+		SELECT
+		    "audio",
+		    "audioName",
+		    "audioType",
+		    "audioDuration",
+		    "DateTime",
+		    "frequencies",
+		    "frequency",
+		    "patches",
+		    "source",
+		    "sources",
+		    "system",
+		    "talkgroup"
+		FROM "rdioScannerCalls" AS "call"
+		JOIN "rdioScannerCallAudio" AS "callAudio" ON "callAudio"."id" = "call"."id"
+		WHERE "call"."id" = %v
 		`,
 		id,
 	)
@@ -479,6 +492,7 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 		patches     string
 		res         sql.Result
 		sources     string
+		tx          *sql.Tx
 	)
 
 	calls.mutex.Lock()
@@ -515,23 +529,56 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 		}
 	}
 
-	res, err = db.Sql.Exec(
-		`
-		insert into "rdioScannerCalls" 
-		    ("id", "audio", "audioName", "audioType", "audioDuration", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup") 
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`,
-		call.Id, call.Audio, call.AudioName, call.AudioType, call.AudioDuration, call.DateTime, frequencies, call.Frequency, patches, call.Source, sources, call.System, call.Talkgroup,
-	)
-	if err != nil {
+	if tx, err = db.Sql.Begin(); err != nil {
 		return 0, formatError(err)
 	}
 
-	if id, err = res.LastInsertId(); err == nil {
-		return uint(id), nil
-	} else {
+	res, err = tx.Exec(
+		`
+		INSERT INTO "rdioScannerCalls"
+		    ("id",
+		     "audioName",
+		     "audioType",
+		     "audioDuration",
+		     "dateTime",
+		     "frequencies",
+		     "frequency",
+		     "patches",
+		     "source",
+		     "sources",
+		     "system",
+		     "talkgroup")
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`,
+		call.Id, call.AudioName, call.AudioType, call.AudioDuration, call.DateTime, frequencies, call.Frequency, patches, call.Source, sources, call.System, call.Talkgroup,
+	)
+	if err != nil {
+		tx.Rollback()
 		return 0, formatError(err)
 	}
+
+	if id, err = res.LastInsertId(); err != nil {
+		tx.Rollback()
+		return 0, formatError(err)
+	}
+
+	res, err = tx.Exec(
+		`
+		INSERT INTO "rdioScannerCallAudio" ("id", "audio")
+		VALUES (?, ?)
+		`,
+		id, call.Audio,
+	)
+	if err != nil {
+		tx.Rollback()
+		return 0, formatError(err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, formatError(err)
+	}
+
+	return uint(id), nil
 }
 
 type CallsSearchOptions struct {
