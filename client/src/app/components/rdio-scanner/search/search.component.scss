@@ -18,12 +18,77 @@
     }
   }
 
+  .units-section {
+    display: flex;
+    flex-direction: column;
+    order: 5;
+
+    .units-select {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .units-chips {
+      margin-top: 8px;
+
+      .mat-chip {
+        margin: 2px 4px 2px 0;
+      }
+    }
+  }
+
   .reset {
     display: flex;
     flex: 100%;
     flex-direction: row;
     justify-content: flex-end;
     order: 7;
+  }
+}
+
+// Units filter section styling (inside mat-select panel)
+.units-filter-section {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+
+  .units-filter-input {
+    padding: 8px 16px 0;
+
+    .mat-form-field {
+      width: 100%;
+      font-size: 14px;
+    }
+  }
+
+  .units-filter-actions {
+    display: flex;
+    gap: 4px;
+    padding: 4px 16px 8px;
+    justify-content: space-between;
+    align-items: center;
+
+    button {
+      font-size: 12px;
+      line-height: 28px;
+      min-height: 28px;
+      padding: 0 8px;
+    }
+
+    .units-mode-toggle {
+      flex-shrink: 0;
+      height: 28px;
+
+      ::ng-deep {
+        .mat-button-toggle {
+          font-size: 11px;
+          line-height: 28px;
+
+          .mat-button-toggle-label-content {
+            padding: 0 8px;
+            line-height: 28px;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -105,44 +170,65 @@
 }
 
 @media (max-width: 459px) {
-  .rdio-filters form .mat-form-field {
-    flex: 100%;
+  .rdio-filters form {
+    .mat-form-field {
+      flex: 100%;
+    }
+
+    .units-section {
+      flex: 100%;
+    }
   }
 }
 
 @media (min-width: 460px) and (max-width: 979px) {
-  .rdio-filters form .mat-form-field {
-    flex: calc(50% - 1em);
+  .rdio-filters form {
+    .mat-form-field {
+      flex: calc(50% - 1em);
 
-    &:nth-of-type(2),
-    &:nth-of-type(4),
-    &:nth-of-type(6) {
-      margin-left: 1em;
+      &:nth-of-type(2),
+      &:nth-of-type(4),
+      &:nth-of-type(6) {
+        margin-left: 1em;
+      }
+    }
+
+    .units-section {
+      flex: 100%;
+      margin-top: 1em;
     }
   }
 }
 
 @media (min-width: 980px) {
-  .rdio-filters form .mat-form-field {
-    flex: calc(100% / 3 - 2em);
+  .rdio-filters form {
+    .mat-form-field {
+      flex: calc(100% / 3 - 2em);
 
-    &:nth-of-type(2),
-    &:nth-of-type(4),
-    &:nth-of-type(5),
-    &:nth-of-type(6) {
-      margin-left: 1em;
+      &:nth-of-type(2),
+      &:nth-of-type(4),
+      &:nth-of-type(5),
+      &:nth-of-type(6) {
+        margin-left: 1em;
+      }
+
+      &:nth-of-type(3) {
+        order: 4;
+      }
+
+      &:nth-of-type(4) {
+        order: 5;
+      }
+
+      &:nth-of-type(5) {
+        order: 3;
+      }
     }
 
-    &:nth-of-type(3) {
-      order: 4;
-    }
-
-    &:nth-of-type(4) {
-      order: 5;
-    }
-
-    &:nth-of-type(5) {
-      order: 3;
+    .units-section {
+      flex: 100%;
+      margin-top: 1em;
+      order: 6;
     }
   }
 }

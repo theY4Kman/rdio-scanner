@@ -20,8 +20,10 @@
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { NgModule } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialogModule } from '@angular/material/dialog';
@@ -44,8 +46,10 @@ import { MatToolbarModule } from '@angular/material/toolbar';
     exports: [
         DragDropModule,
         MatButtonModule,
+        MatButtonToggleModule,
         MatCardModule,
         MatCheckboxModule,
+        MatChipsModule,
         MatDatepickerModule,
         MatDialogModule,
         MatExpansionModule,

@@ -17,9 +17,10 @@
  * ****************************************************************************
  */
 
-import { AfterViewInit, ChangeDetectorRef, Component, Input, OnDestroy, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, Input, OnDestroy, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
+import { MatSelect } from '@angular/material/select';
 import { BehaviorSubject } from 'rxjs';
 import {
     RdioScannerCall,
@@ -30,6 +31,7 @@ import {
     RdioScannerSearchOptions,
     RdioScannerSystem,
     RdioScannerTalkgroup,
+    RdioScannerUnit,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
@@ -51,6 +53,8 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         system: [-1],
         tag: [-1],
         talkgroup: [-1],
+        units: [[]],
+        unitsMode: ['any'],
     });
 
     livefeedOnline = false;
@@ -62,6 +66,9 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     optionsSystem: string[] = [];
     optionsTag: string[] = [];
     optionsTalkgroup: [RdioScannerSystem, string][] = [];
+    optionsUnit: [RdioScannerSystem, RdioScannerUnit][] = [];
+    optionsUnitFiltered: [RdioScannerSystem, RdioScannerUnit][] = [];
+    unitsFilterText = '';
 
     paused = false;
 
@@ -83,6 +90,8 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     @Input() panel: MatSidenav | undefined;
 
     @ViewChild(MatPaginator, { read: MatPaginator }) private paginator: MatPaginator | undefined;
+    @ViewChild('unitsSelect', { read: MatSelect }) private unitsSelect: MatSelect | undefined;
+    @ViewChild('unitsFilterInput', { read: ElementRef }) private unitsFilterInput: ElementRef<HTMLInputElement> | undefined;
 
     constructor(
         private rdioScannerService: RdioScannerService,
@@ -137,6 +146,7 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         const selectedSystems = selectedSystem ? [selectedSystem] : this.config.systems ?? [];
         const selectedTag = this.getSelectedTag();
         const [selectedTalkgroupSystem, selectedTalkgroup] = this.getSelectedTalkgroup();
+        const selectedUnits = this.getSelectedUnits();
 
         this.optionsSystem = this.config.systems
             .filter((system) => {
@@ -191,6 +201,16 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             })
             .sort((a, b) => a.localeCompare(b))
 
+        // Filter units based on selected system and sort by label
+        this.optionsUnit = selectedSystems
+            .flatMap((sys) =>
+                (sys.units || []).map((unit) => [sys, unit] as [RdioScannerSystem, RdioScannerUnit])
+            )
+            .sort((a, b) => a[1].label.localeCompare(b[1].label));
+
+        // Apply text filter
+        this.filterUnits();
+
         this.form.patchValue({
             group: selectedGroup
                 ? this.optionsGroup.findIndex((group) => group === selectedGroup)
@@ -206,6 +226,9 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
                     talkgroup === selectedTalkgroup.label && selectedSystems.find((sys) => sys.id === system.id)
                 ))
                 : -1,
+            units: selectedUnits
+                .map((unit) => this.optionsUnit.findIndex(([sys, u]) => u.id === unit.id))
+                .filter((index) => index !== -1),
         });
     }
 
@@ -240,6 +263,8 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             system: -1,
             tag: -1,
             talkgroup: -1,
+            units: [],
+            unitsMode: 'any',
         });
 
         this.paginator?.firstPage();
@@ -304,6 +329,13 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             }
         }
 
+        // Add units filter if any units are selected
+        const selectedUnits = this.getSelectedUnits();
+        if (selectedUnits.length > 0) {
+            options.units = selectedUnits.map((unit) => unit.id);
+            options.unitsMode = this.form.value.unitsMode || 'any';
+        }
+
         this.resultsPending = true;
 
         this.form.disable();
@@ -348,6 +380,14 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
             this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
             this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
             this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
+            this.optionsUnit = (this.config?.systems || [])
+                .flatMap((system) =>
+                    (system.units || []).map((unit) => [system, unit] as [RdioScannerSystem, RdioScannerUnit])
+                )
+                .sort((a, b) => a[1].label.localeCompare(b[1].label));
+
+            // Apply text filter
+            this.filterUnits();
 
             this.time12h = this.config?.time12hFormat || false;
         }
@@ -416,6 +456,142 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         }
 
         return [system, talkgroup];
+    }
+
+    private getSelectedUnits(): RdioScannerUnit[] {
+        const selectedIndices = this.form.value.units || [];
+        return selectedIndices
+            .map((index: number) => {
+                const option = this.optionsUnit[index];
+                return option ? option[1] : undefined;
+            })
+            .filter((unit: RdioScannerUnit | undefined): unit is RdioScannerUnit => unit !== undefined);
+    }
+
+    /**
+     * Get count of unique systems in optionsUnit
+     */
+    getUniqueSystemsCount(): number {
+        const systemIds = new Set(this.optionsUnit.map(([system]) => system.id));
+        return systemIds.size;
+    }
+
+    /**
+     * Get unique systems that have units
+     */
+    getSystemsWithUnits(): RdioScannerSystem[] {
+        const systemMap = new Map<number, RdioScannerSystem>();
+        this.optionsUnit.forEach(([system]) => {
+            if (!systemMap.has(system.id)) {
+                systemMap.set(system.id, system);
+            }
+        });
+        return Array.from(systemMap.values());
+    }
+
+    /**
+     * Get units for a specific system (filtered)
+     */
+    getUnitsForSystem(system: RdioScannerSystem): [RdioScannerSystem, RdioScannerUnit][] {
+        return this.optionsUnitFiltered.filter(([sys]) => sys.id === system.id);
+    }
+
+    /**
+     * Filter units based on search text
+     */
+    filterUnits(): void {
+        const filterText = this.unitsFilterText.toLowerCase().trim();
+
+        if (!filterText) {
+            this.optionsUnitFiltered = this.optionsUnit;
+        } else {
+            this.optionsUnitFiltered = this.optionsUnit.filter(([sys, unit]) => {
+                return unit.label.toLowerCase().includes(filterText) ||
+                       unit.id.toString().includes(filterText);
+            });
+        }
+    }
+
+    /**
+     * Clear units filter
+     */
+    clearUnitsFilter(): void {
+        this.unitsFilterText = '';
+        this.filterUnits();
+    }
+
+    /**
+     * Get the index of a unit option in optionsUnit array
+     */
+    getUnitOptionIndex(option: [RdioScannerSystem, RdioScannerUnit]): number {
+        return this.optionsUnit.findIndex(([sys, unit]) =>
+            sys.id === option[0].id && unit.id === option[1].id
+        );
+    }
+
+    /**
+     * TrackBy function for performance optimization
+     */
+    trackByUnitOption(index: number, option: [RdioScannerSystem, RdioScannerUnit]): string {
+        return `${option[0].id}-${option[1].id}`;
+    }
+
+    /**
+     * Remove a specific unit from selection
+     */
+    removeUnit(unitIndex: number): void {
+        const currentUnits = this.form.value.units || [];
+        const newUnits = currentUnits.filter((index: number) => index !== unitIndex);
+        this.form.patchValue({ units: newUnits });
+        this.formChangeHandler();
+    }
+
+    /**
+     * Handle units select dropdown opened event
+     */
+    onUnitsSelectOpened(): void {
+        // Focus the filter input when dropdown opens
+        setTimeout(() => {
+            this.unitsFilterInput?.nativeElement.focus();
+        }, 0);
+    }
+
+    /**
+     * Select all currently filtered units
+     */
+    selectAllFilteredUnits(): void {
+        const currentUnits = this.form.value.units || [];
+        const filteredIndices = this.optionsUnitFiltered.map(option => this.getUnitOptionIndex(option));
+
+        // Merge current selection with filtered units (avoiding duplicates)
+        const newUnits = Array.from(new Set([...currentUnits, ...filteredIndices]));
+
+        this.form.patchValue({ units: newUnits });
+        this.formChangeHandler();
+    }
+
+    /**
+     * Deselect all currently filtered units
+     */
+    deselectAllFilteredUnits(): void {
+        const currentUnits = this.form.value.units || [];
+        const filteredIndices = new Set(this.optionsUnitFiltered.map(option => this.getUnitOptionIndex(option)));
+
+        // Remove filtered units from current selection
+        const newUnits = currentUnits.filter((index: number) => !filteredIndices.has(index));
+
+        this.form.patchValue({ units: newUnits });
+        this.formChangeHandler();
+    }
+
+    /**
+     * Check if all filtered units are selected
+     */
+    areAllFilteredUnitsSelected(): boolean {
+        const currentUnits = new Set(this.form.value.units || []);
+        return this.optionsUnitFiltered.every(option =>
+            currentUnits.has(this.getUnitOptionIndex(option))
+        );
     }
 
     /**

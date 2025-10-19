@@ -238,6 +238,46 @@ func (calls *Calls) Prune(db *Database, pruneDays uint) error {
 	return err
 }
 
+// buildUnitsWhereClause generates the SQL WHERE clause for unit filtering.
+// Uses the rdioScannerCallSources junction table for fast indexed lookups.
+func buildUnitsWhereClause(units []uint, mode string, dbType string) string {
+	if len(units) == 0 {
+		return ""
+	}
+
+	// Normalize mode
+	if mode != "all" && mode != "any" {
+		mode = "any"
+	}
+
+	// Build the unit list for SQL
+	unitStrs := make([]string, len(units))
+	for i, unit := range units {
+		unitStrs[i] = fmt.Sprintf("%d", unit)
+	}
+	unitsIn := strings.Join(unitStrs, ", ")
+
+	var whereClause string
+
+	if mode == "all" {
+		// All units must be present: check that the call has at least N matching units
+		// where N is the number of units we're searching for
+		whereClause = fmt.Sprintf(
+			"`id` IN (SELECT `callId` FROM `rdioScannerCallSources` WHERE `unitId` IN (%s) GROUP BY `callId` HAVING COUNT(DISTINCT `unitId`) = %d)",
+			unitsIn,
+			len(units),
+		)
+	} else {
+		// Any unit can be present: simple IN clause
+		whereClause = fmt.Sprintf(
+			"`id` IN (SELECT `callId` FROM `rdioScannerCallSources` WHERE `unitId` IN (%s))",
+			unitsIn,
+		)
+	}
+
+	return whereClause
+}
+
 func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*CallsSearchResults, error) {
 	const (
 		ascOrder  = "asc"
@@ -340,6 +380,13 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		}
 		if len(a) > 0 {
 			where += fmt.Sprintf(" and (%s)", strings.Join(a, " or "))
+		}
+	}
+
+	// Add unit filtering if specified
+	if len(searchOptions.Units) > 0 {
+		if unitClause := buildUnitsWhereClause(searchOptions.Units, searchOptions.UnitsMode, db.Config.DbType); unitClause != "" {
+			where += fmt.Sprintf(" and %s", unitClause)
 		}
 	}
 
@@ -574,6 +621,51 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 		return 0, formatError(err)
 	}
 
+	// Populate the junction table for fast unit queries
+	switch v := call.Sources.(type) {
+	case []map[string]any:
+		for _, sourceMap := range v {
+			var (
+				unitId uint
+				pos    any
+			)
+
+			// Extract unitId (src field)
+			switch srcVal := sourceMap["src"].(type) {
+			case float64:
+				unitId = uint(srcVal)
+			case uint:
+				unitId = srcVal
+			case int:
+				unitId = uint(srcVal)
+			}
+
+			// Extract position (pos field)
+			switch posVal := sourceMap["pos"].(type) {
+			case float64:
+				pos = posVal
+			case int:
+				pos = float64(posVal)
+			case nil:
+				pos = nil
+			default:
+				pos = nil
+			}
+
+			// Only insert if we have a valid unitId
+			if unitId > 0 {
+				_, err = tx.Exec(
+					`INSERT INTO "rdioScannerCallSources" ("callId", "unitId", "pos") VALUES (?, ?, ?)`,
+					id, unitId, pos,
+				)
+				if err != nil {
+					tx.Rollback()
+					return 0, formatError(err)
+				}
+			}
+		}
+	}
+
 	if err = tx.Commit(); err != nil {
 		return 0, formatError(err)
 	}
@@ -582,14 +674,16 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 }
 
 type CallsSearchOptions struct {
-	Date                    any `json:"date,omitempty"`
-	Group                   any `json:"group,omitempty"`
-	Limit                   any `json:"limit,omitempty"`
-	Offset                  any `json:"offset,omitempty"`
-	Sort                    any `json:"sort,omitempty"`
-	System                  any `json:"system,omitempty"`
-	Tag                     any `json:"tag,omitempty"`
-	Talkgroup               any `json:"talkgroup,omitempty"`
+	Date                    any    `json:"date,omitempty"`
+	Group                   any    `json:"group,omitempty"`
+	Limit                   any    `json:"limit,omitempty"`
+	Offset                  any    `json:"offset,omitempty"`
+	Sort                    any    `json:"sort,omitempty"`
+	System                  any    `json:"system,omitempty"`
+	Tag                     any    `json:"tag,omitempty"`
+	Talkgroup               any    `json:"talkgroup,omitempty"`
+	Units                   []uint `json:"units,omitempty"`
+	UnitsMode               string `json:"unitsMode,omitempty"`
 	searchPatchedTalkgroups bool
 }
 
@@ -634,6 +728,36 @@ func (searchOptions *CallsSearchOptions) fromMap(m map[string]any) error {
 	switch v := m["talkgroup"].(type) {
 	case float64:
 		searchOptions.Talkgroup = uint(v)
+	}
+
+	// Parse units array
+	switch v := m["units"].(type) {
+	case []any:
+		units := make([]uint, 0, len(v))
+		for _, item := range v {
+			switch unitVal := item.(type) {
+			case float64:
+				units = append(units, uint(unitVal))
+			}
+		}
+		if len(units) > 0 {
+			searchOptions.Units = units
+		}
+	}
+
+	// Parse unitsMode with validation
+	switch v := m["unitsMode"].(type) {
+	case string:
+		// Normalize and validate the mode
+		mode := strings.ToLower(strings.TrimSpace(v))
+		if mode == "all" || mode == "any" {
+			searchOptions.UnitsMode = mode
+		}
+	}
+
+	// Default to "any" mode if units are provided but mode is not specified
+	if len(searchOptions.Units) > 0 && searchOptions.UnitsMode == "" {
+		searchOptions.UnitsMode = "any"
 	}
 
 	return nil

@@ -20,6 +20,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Split off audio blobs to separate table, to improve query performance of search
 - Reorder columns in call table to improve query performance of search
 - Show full date/time of call in search results, using title attribute
+- Add units filtering to search page (find calls with any/all selected units)
 
 ### Fixed
 - Hide trailing "s" in duration col on search page if no row

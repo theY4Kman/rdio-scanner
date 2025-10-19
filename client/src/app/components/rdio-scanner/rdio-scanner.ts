@@ -179,6 +179,8 @@ export interface RdioScannerSearchOptions {
     system?: number;
     tag?: string;
     talkgroup?: number;
+    units?: number[];
+    unitsMode?: 'all' | 'any';
 }
 
 export interface RdioScannerSystem {

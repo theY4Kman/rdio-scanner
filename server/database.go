@@ -119,6 +119,7 @@ func (db *Database) migrate() error {
 		db.migration20220418033700,
 		db.migration20240226015553,
 		db.migration20250414171018,
+		db.migration20251017014219,
 	}
 
 	for _, migration := range migrations {
@@ -550,6 +551,64 @@ func (db *Database) migration20250414171018(verbose bool) error {
 		"create index `rdio_scanner_calls_date_time_system_talkgroup` on `rdioScannerCalls` (`dateTime`, `system`, `talkgroup`)",
 	}
 	return db.migrateWithSchema("20240226015553-v6.6.3-yak.0.0.1-separate-audio-table", queries, verbose)
+}
+
+func (db *Database) migration20251017014219(verbose bool) error {
+	var queries []string
+	if db.Config.DbType == DbTypeSqlite {
+		queries = []string{
+			// Create junction table for call sources with proper indexes
+			// Uses auto-increment ID as primary key to allow duplicate unitId per call
+			`CREATE TABLE rdioScannerCallSources (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				callId INTEGER NOT NULL,
+				unitId INTEGER NOT NULL,
+				pos REAL,
+				FOREIGN KEY (callId) REFERENCES rdioScannerCalls(id) ON DELETE CASCADE
+			);`,
+			// Create indexes for fast unit lookups
+			`CREATE INDEX rdio_scanner_call_sources_unit_id ON rdioScannerCallSources(unitId);`,
+			`CREATE INDEX rdio_scanner_call_sources_call_id ON rdioScannerCallSources(callId);`,
+			// Populate junction table from existing JSON sources column
+			`INSERT INTO rdioScannerCallSources (callId, unitId, pos)
+			SELECT
+				c.id,
+				CAST(json_extract(j.value, '$.src') AS INTEGER),
+				CAST(json_extract(j.value, '$.pos') AS REAL)
+			FROM rdioScannerCalls c,
+				json_each(c.sources) j
+			WHERE json_extract(j.value, '$.src') IS NOT NULL;`,
+		}
+	} else {
+		queries = []string{
+			// Create junction table for call sources with proper indexes
+			// Uses auto-increment ID as primary key to allow duplicate unitId per call
+			`CREATE TABLE rdioScannerCallSources (
+				id INTEGER PRIMARY KEY AUTO_INCREMENT,
+				callId INTEGER NOT NULL,
+				unitId INTEGER NOT NULL,
+				pos REAL,
+				FOREIGN KEY (callId) REFERENCES rdioScannerCalls(id) ON DELETE CASCADE,
+				INDEX rdio_scanner_call_sources_unit_id (unitId),
+				INDEX rdio_scanner_call_sources_call_id (callId)
+			);`,
+			// Populate junction table from existing JSON sources column
+			`INSERT INTO rdioScannerCallSources (callId, unitId, pos)
+			SELECT
+				c.id,
+				JSON_UNQUOTE(JSON_EXTRACT(jt.value, '$.src')),
+				JSON_UNQUOTE(JSON_EXTRACT(jt.value, '$.pos'))
+			FROM rdioScannerCalls c
+			JOIN JSON_TABLE(
+				c.sources,
+				'$[*]' COLUMNS(
+					value JSON PATH '$'
+				)
+			) AS jt
+			WHERE JSON_EXTRACT(jt.value, '$.src') IS NOT NULL;`,
+		}
+	}
+	return db.migrateWithSchema("20251017014219-add-call-sources-junction-table", queries, verbose)
 }
 
 func (db *Database) prepareMigration() (bool, error) {

@@ -137,6 +137,142 @@
                 </mat-option>
             </mat-select>
         </mat-form-field>
+        <!-- NEW: Units multi-select -->
+        <div class="units-section">
+            <mat-form-field class="units-select">
+                    <mat-label>
+                        Unit(s)
+                    </mat-label>
+                    <mat-select
+                        #unitsSelect
+                        formControlName="units"
+                        multiple
+                        (selectionChange)="formChangeHandler()"
+                        (openedChange)="$event ? onUnitsSelectOpened() : null"
+                        [disabled]="optionsUnit.length === 0"
+                        aria-label="Select one or more units to filter by">
+                        <mat-select-trigger>
+                            <span *ngIf="form.value.units?.length === 0">All Units</span>
+                            <span *ngIf="form.value.units?.length === 1">
+                                {{ optionsUnit[form.value.units[0]]?.[1]?.label }}
+                            </span>
+                            <span *ngIf="form.value.units?.length > 1">
+                                {{ form.value.units.length }} units selected
+                            </span>
+                        </mat-select-trigger>
+
+                        <!-- Filter input and actions -->
+                        <div class="units-filter-section">
+                            <div class="units-filter-input">
+                                <mat-form-field appearance="fill">
+                                    <mat-label>Filter units</mat-label>
+                                    <input
+                                        #unitsFilterInput
+                                        matInput
+                                        [(ngModel)]="unitsFilterText"
+                                        (ngModelChange)="filterUnits()"
+                                        [ngModelOptions]="{standalone: true}"
+                                        placeholder="Search by name or ID"
+                                        autocomplete="off"
+                                        (click)="$event.stopPropagation()"
+                                        (keydown)="$event.stopPropagation()">
+                                    <button
+                                        mat-icon-button
+                                        matSuffix
+                                        *ngIf="unitsFilterText"
+                                        (click)="clearUnitsFilter(); $event.stopPropagation()"
+                                        aria-label="Clear filter">
+                                        <mat-icon>close</mat-icon>
+                                    </button>
+                                </mat-form-field>
+                            </div>
+                            <div class="units-filter-actions">
+                                <button
+                                    mat-button
+                                    color="primary"
+                                    (click)="selectAllFilteredUnits(); $event.stopPropagation()"
+                                    [disabled]="optionsUnitFiltered.length === 0 || areAllFilteredUnitsSelected()"
+                                    aria-label="Select all filtered units">
+                                    Select All
+                                </button>
+                                <button
+                                    mat-button
+                                    (click)="deselectAllFilteredUnits(); $event.stopPropagation()"
+                                    [disabled]="optionsUnitFiltered.length === 0"
+                                    aria-label="Deselect all filtered units">
+                                    Deselect All
+                                </button>
+                                <button
+                                    mat-button
+                                    (click)="form.patchValue({ units: [] }); formChangeHandler(); $event.stopPropagation()"
+                                    [disabled]="!form.value.units || form.value.units.length === 0"
+                                    aria-label="Clear all selected units">
+                                    Clear All
+                                </button>
+                                <!-- ANY/ALL Toggle -->
+                                <mat-button-toggle-group
+                                    class="units-mode-toggle"
+                                    formControlName="unitsMode"
+                                    (change)="formChangeHandler()"
+                                    [disabled]="form.value.units?.length === 0"
+                                    [title]="form.value.units?.length > 0 ? (form.value.unitsMode === 'all' ? 'Calls with ALL selected units' : 'Calls with ANY selected unit') : 'Select units to enable'"
+                                    aria-label="Choose whether to match all units or any unit">
+                                    <mat-button-toggle
+                                        value="any"
+                                        title="Match calls with ANY of the selected units"
+                                        aria-label="Match any of the selected units">
+                                        ANY
+                                    </mat-button-toggle>
+                                    <mat-button-toggle
+                                        value="all"
+                                        title="Match calls with ALL of the selected units"
+                                        aria-label="Match all of the selected units">
+                                        ALL
+                                    </mat-button-toggle>
+                                </mat-button-toggle-group>
+                            </div>
+                        </div>
+
+                        <!-- Group units by system if multiple systems available -->
+                        <ng-container *ngIf="getUniqueSystemsCount() > 1">
+                            <ng-container *ngFor="let system of getSystemsWithUnits()">
+                                <mat-optgroup [label]="system.label">
+                                    <mat-option
+                                        *ngFor="let option of getUnitsForSystem(system); trackBy: trackByUnitOption"
+                                        [value]="getUnitOptionIndex(option)">
+                                        {{ option[1].label }}
+                                    </mat-option>
+                                </mat-optgroup>
+                            </ng-container>
+                        </ng-container>
+
+                        <!-- Show flat list if only one system -->
+                        <ng-container *ngIf="getUniqueSystemsCount() === 1">
+                            <mat-option
+                                *ngFor="let option of optionsUnitFiltered; index as i; trackBy: trackByUnitOption"
+                                [value]="getUnitOptionIndex(option)">
+                                {{ option[1].label }}
+                            </mat-option>
+                        </ng-container>
+                    </mat-select>
+            </mat-form-field>
+
+            <!-- Chip display for selected units (optional but recommended) -->
+            <mat-chip-list *ngIf="form.value.units?.length > 0" class="units-chips" aria-label="Selected units">
+                <mat-chip
+                    *ngFor="let unitIndex of form.value.units?.slice(0, 5)"
+                    [removable]="true"
+                    (removed)="removeUnit(unitIndex)"
+                    color="primary"
+                    selected>
+                    {{ optionsUnit[unitIndex]?.[1]?.label }}
+                    <mat-icon matChipRemove>cancel</mat-icon>
+                </mat-chip>
+                <mat-chip *ngIf="form.value.units?.length > 5" disabled>
+                    +{{ form.value.units.length - 5 }} more
+                </mat-chip>
+            </mat-chip-list>
+        </div>
         <mat-form-field>
             <mat-label>
                 Group

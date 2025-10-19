@@ -1,4 +1,4 @@
-FROM node:21.2.0 as client
+FROM node:21.2.0 AS client
 WORKDIR /app
 
 COPY client/package.json client/package-lock.json ./
