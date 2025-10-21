@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { LabelerService } from './labeler.service';
 import { FormBuilder } from '@angular/forms';
 import { combineLatest, map, Observable, Subscription } from 'rxjs';
@@ -11,6 +11,8 @@ import { MatDialog } from '@angular/material/dialog';
 })
 export class LabelerComponent implements OnInit, OnDestroy {
     private readonly subscriptions: Subscription[] = [];
+
+    @ViewChild('unitLabelInput') unitLabelInput?: ElementRef<HTMLInputElement>;
 
     unitLabelForm = this.ngFormBuilder.group({ label: [] });
     didClickDelete = false;
@@ -32,6 +34,11 @@ export class LabelerComponent implements OnInit, OnDestroy {
 
                 if (isConfiguringUnitLabel) {
                     this.unitLabelForm.get('label')?.setValue(this.labeler.unitLabelSource?.label ?? '');
+
+                    // Focus the input after the view updates
+                    setTimeout(() => {
+                        this.unitLabelInput?.nativeElement?.focus();
+                    });
                 }
             })
         );
