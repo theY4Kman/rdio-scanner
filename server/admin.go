@@ -665,6 +665,49 @@ func (admin *Admin) UserRemoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (admin *Admin) UnitLabelHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		logError := func(err error) {
+			admin.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("admin.unitlabelhistoryhandler.post: %s", err.Error()))
+		}
+
+		t := admin.GetAuthorization(r)
+		if !admin.ValidateToken(t) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		var body struct {
+			SystemId uint `json:"systemId"`
+			UnitId   uint `json:"unitId"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			logError(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		history, err := admin.Controller.Database.GetUnitLabelHistory(body.SystemId, body.UnitId)
+		if err != nil {
+			logError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("content-type", "application/json")
+		if err := json.NewEncoder(w).Encode(history); err != nil {
+			logError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 func (admin *Admin) ValidateToken(sToken string) bool {
 	found := false
 	for _, t := range admin.Tokens {

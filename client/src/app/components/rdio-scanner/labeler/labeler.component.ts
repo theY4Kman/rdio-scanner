@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { LabelerService } from './labeler.service';
 import { FormBuilder } from '@angular/forms';
 import { combineLatest, map, Observable, Subscription } from 'rxjs';
+import { MatDialog } from '@angular/material/dialog';
 
 @Component({
     selector: 'rdio-scanner-labeler',
@@ -20,6 +21,7 @@ export class LabelerComponent implements OnInit, OnDestroy {
         public labeler: LabelerService,
         private ngFormBuilder: FormBuilder,
         private ngChangeDetectorRef: ChangeDetectorRef,
+        private dialog: MatDialog,
     ) {
     }
 
@@ -88,5 +90,29 @@ export class LabelerComponent implements OnInit, OnDestroy {
     private resetForms(): void {
         this.unitLabelForm.reset();
         this.didClickDelete = false;
+    }
+
+    searchForUnit(): void {
+        const call = this.labeler.unitLabelCall;
+        const source = this.labeler.unitLabelSource;
+
+        if (!call || !source?.src) {
+            return;
+        }
+
+        // Emit an event to open the search panel with this unit
+        this.labeler.searchForUnit(call.system, source.src);
+        this.labeler.cancelUnitLabelConfiguration();
+    }
+
+    async showLabelHistory(): Promise<void> {
+        const call = this.labeler.unitLabelCall;
+        const source = this.labeler.unitLabelSource;
+
+        if (!call || !source?.src) {
+            return;
+        }
+
+        await this.labeler.showLabelHistory(call.system, source.src);
     }
 }

@@ -16,6 +16,16 @@
     [formGroup]="unitLabelForm"
     (ngSubmit)="submitUnitLabelConfiguration()"
   >
+    <button
+      mat-icon-button
+      class="close-button"
+      type="button"
+      (click)="labeler.cancelUnitLabelConfiguration()"
+      title="Close (discard changes)"
+      aria-label="Close dialog">
+      <mat-icon>close</mat-icon>
+    </button>
+
     <mat-form-field>
       <input
         matInput
@@ -26,15 +36,37 @@
       >
     </mat-form-field>
 
-    <button
-      mat-button
-      color="warn"
-      class="delete-button"
-      type="button"
-      [disabled]="this.labeler.unitLabelSource?.label == null || isLoading"
-      (click)="onDeleteClick()"
-      onclick="return false;"
-    >{{ !didClickDelete ? 'Delete' : 'Really?' }}
-    </button>
+    <div class="action-buttons">
+      <button
+        mat-button
+        type="button"
+        [disabled]="isLoading"
+        (click)="searchForUnit()"
+        title="Search for calls with this unit">
+        <mat-icon>search</mat-icon>
+        Search Calls
+      </button>
+
+      <button
+        mat-button
+        type="button"
+        [disabled]="isLoading"
+        (click)="showLabelHistory()"
+        title="View label history for this unit">
+        <mat-icon>history</mat-icon>
+        Label History
+      </button>
+
+      <button
+        mat-button
+        color="warn"
+        class="delete-button"
+        type="button"
+        [disabled]="this.labeler.unitLabelSource?.label == null || isLoading"
+        (click)="onDeleteClick()"
+        onclick="return false;"
+      >{{ !didClickDelete ? 'Delete' : 'Really?' }}
+      </button>
+    </div>
   </form>
 </div>

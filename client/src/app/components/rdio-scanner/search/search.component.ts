@@ -36,6 +36,7 @@ import {
 import { RdioScannerService } from '../rdio-scanner.service';
 import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
 import { MatSidenav } from "@angular/material/sidenav";
+import { LabelerService } from '../labeler/labeler.service';
 
 @Component({
     selector: 'rdio-scanner-search',
@@ -83,6 +84,8 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
+    private searchForUnitSubscription = this.labelerService.searchForUnit$.subscribe((event) => this.handleSearchForUnit(event));
+
     private limit = 200;
 
     private offset = 0;
@@ -97,6 +100,7 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
+        private labelerService: LabelerService,
     ) { }
 
     ngAfterViewInit(): void {
@@ -130,6 +134,7 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
+        this.searchForUnitSubscription.unsubscribe();
     }
 
     play(id: number): void {
@@ -613,5 +618,45 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
         if (this.results.value) {
             yield* this.results.value.filter((call) => call !== null) as RdioScannerCall[];
         }
+    }
+
+    /**
+     * Handle search for unit event from labeler service
+     */
+    private handleSearchForUnit(event: { systemId: number; unitId: number }): void {
+        if (!this.config) {
+            return;
+        }
+
+        // Find the system index
+        const systemIndex = this.config.systems.findIndex((sys) => sys.id === event.systemId);
+
+        // Find the unit in optionsUnit
+        const unitOptionIndex = this.optionsUnit.findIndex(([sys, unit]) =>
+            sys.id === event.systemId && unit.id === event.unitId
+        );
+
+        if (systemIndex === -1 || unitOptionIndex === -1) {
+            console.warn('Unable to find system or unit for search:', event);
+            return;
+        }
+
+        // Reset the form to default values
+        this.form.patchValue({
+            date: null,
+            group: -1,
+            sort: -1,
+            system: systemIndex,
+            tag: -1,
+            talkgroup: -1,
+            units: [unitOptionIndex],
+            unitsMode: 'any',
+        });
+
+        // Open the search panel
+        this.panel?.open();
+
+        // Trigger search
+        this.formChangeHandler();
     }
 }

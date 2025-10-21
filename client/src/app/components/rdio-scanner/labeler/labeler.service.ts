@@ -1,14 +1,25 @@
 import { Injectable } from '@angular/core';
 import { RdioScannerAdminService } from '../admin/admin.service';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { RdioScannerCall, RdioScannerCallSource } from '../rdio-scanner';
+import { MatDialog } from '@angular/material/dialog';
+
+export interface SearchForUnitEvent {
+    systemId: number;
+    unitId: number;
+}
 
 @Injectable({
     providedIn: 'root'
 })
 export class LabelerService {
+    // Event emitter for search unit requests
+    private readonly _searchForUnit = new Subject<SearchForUnitEvent>();
+    readonly searchForUnit$ = this._searchForUnit.asObservable();
+
     constructor(
         private adminService: RdioScannerAdminService,
+        private dialog: MatDialog,
     ) {}
 
     get isAdminAuthenticated(): boolean {
@@ -82,5 +93,26 @@ export class LabelerService {
         } else {
             return src.toString();
         }
+    }
+
+    searchForUnit(systemId: number, unitId: number): void {
+        this._searchForUnit.next({ systemId, unitId });
+    }
+
+    async showLabelHistory(systemId: number, unitId: number): Promise<void> {
+        const history = await this.adminService.getUnitLabelHistory(systemId, unitId);
+
+        // Create and open a dialog showing the history
+        const { UnitLabelHistoryDialogComponent } = await import('./unit-label-history-dialog/unit-label-history-dialog.component');
+        this.dialog.open(UnitLabelHistoryDialogComponent, {
+            data: {
+                systemId,
+                unitId,
+                history,
+                formatSrcId: this.formatSrcId.bind(this),
+            },
+            width: '600px',
+            maxHeight: '80vh',
+        });
     }
 }

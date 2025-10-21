@@ -1,0 +1,36 @@
+<h2 mat-dialog-title>
+    Unit Label History
+    <button mat-icon-button class="close-button" (click)="close()" title="Close" aria-label="Close dialog">
+        <mat-icon>close</mat-icon>
+    </button>
+</h2>
+
+<mat-dialog-content>
+    <div class="unit-info">
+        <strong>Unit ID:</strong> {{ formattedUnitId }}
+    </div>
+
+    <div *ngIf="data.history.length === 0" class="no-history">
+        No label history found for this unit.
+    </div>
+
+    <mat-list *ngIf="data.history.length > 0">
+        <mat-list-item *ngFor="let entry of data.history">
+            <div class="history-entry">
+                <div class="history-date">
+                    {{ entry.createdAt | date:'MM/dd/yyyy, h:mm:ss a' }}
+                </div>
+                <div class="history-label">
+                    <strong>Label:</strong>
+                    <span *ngIf="entry.label">{{ entry.label }}</span>
+                    <span *ngIf="!entry.label" class="no-label">(deleted)</span>
+                </div>
+            </div>
+            <mat-divider></mat-divider>
+        </mat-list-item>
+    </mat-list>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-button (click)="close()">Close</button>
+</mat-dialog-actions>

@@ -31,6 +31,7 @@ import { RdioScannerAdminModule } from './admin';
 import { A11yModule } from '@angular/cdk/a11y';
 import { CallSourceComponent } from './labeler/call-source/call-source.component';
 import { LabelerComponent } from './labeler/labeler.component';
+import { UnitLabelHistoryDialogComponent } from './labeler/unit-label-history-dialog/unit-label-history-dialog.component';
 
 @NgModule({
     declarations: [
@@ -40,6 +41,7 @@ import { LabelerComponent } from './labeler/labeler.component';
         RdioScannerSelectComponent,
         CallSourceComponent,
         LabelerComponent,
+        UnitLabelHistoryDialogComponent,
     ],
     exports: [RdioScannerComponent],
     imports: [

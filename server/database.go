@@ -710,3 +710,55 @@ func (db *Database) seedTags() error {
 
 	return nil
 }
+
+type UnitLabelHistoryEntry struct {
+	Id        uint      `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	UnitId    uint      `json:"unitId"`
+	Label     *string   `json:"label"`
+}
+
+func (db *Database) GetUnitLabelHistory(systemId uint, unitId uint) ([]UnitLabelHistoryEntry, error) {
+	var (
+		err     error
+		rows    *sql.Rows
+		history []UnitLabelHistoryEntry
+	)
+
+	formatError := func(err error) error {
+		return fmt.Errorf("database.getunitlabelhistory: %v", err)
+	}
+
+	// First, get the internal _id for this unit from rdioScannerUnits
+	var internalUnitId uint
+	query := "SELECT `_id` FROM `rdioScannerUnits` WHERE `systemId` = ? AND `id` = ?"
+	if err = db.Sql.QueryRow(query, systemId, unitId).Scan(&internalUnitId); err != nil {
+		if err == sql.ErrNoRows {
+			// Unit not found, return empty history
+			return []UnitLabelHistoryEntry{}, nil
+		}
+		return nil, formatError(err)
+	}
+
+	// Now get the history for this internal unit ID
+	query = "SELECT `id`, `createdAt`, `unitId`, `label` FROM `rdioScannerUnitLabelHistory` WHERE `unitId` = ? ORDER BY `createdAt` DESC"
+	if rows, err = db.Sql.Query(query, internalUnitId); err != nil {
+		return nil, formatError(err)
+	}
+	defer rows.Close()
+
+	history = []UnitLabelHistoryEntry{}
+	for rows.Next() {
+		var entry UnitLabelHistoryEntry
+		if err = rows.Scan(&entry.Id, &entry.CreatedAt, &entry.UnitId, &entry.Label); err != nil {
+			return nil, formatError(err)
+		}
+		history = append(history, entry)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, formatError(err)
+	}
+
+	return history, nil
+}

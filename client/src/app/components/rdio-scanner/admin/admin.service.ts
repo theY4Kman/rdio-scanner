@@ -182,6 +182,13 @@ export interface Unit {
     order?: number;
 }
 
+export interface UnitLabelHistoryEntry {
+    id: number;
+    createdAt: Date;
+    unitId: number;
+    label: string | null;
+}
+
 enum url {
     config = 'config',
     login = 'login',
@@ -410,6 +417,23 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async deleteUnitLabel(systemId: number, unitId: number): Promise<boolean> {
         return this.setUnitLabel(systemId, unitId, undefined);
+    }
+
+    async getUnitLabelHistory(systemId: number, unitId: number): Promise<UnitLabelHistoryEntry[]> {
+        try {
+            const res = await firstValueFrom(this.ngHttpClient.post<UnitLabelHistoryEntry[]>(
+                this.getUrl('unit-label-history'),
+                { systemId, unitId },
+                { headers: this.getHeaders(), responseType: 'json' },
+            ));
+
+            return res;
+
+        } catch (error) {
+            this.errorHandler(error);
+
+            return [];
+        }
     }
 
     newAccessForm(access?: Access): FormGroup {

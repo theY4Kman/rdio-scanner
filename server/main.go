@@ -103,6 +103,8 @@ func main() {
 
 	http.HandleFunc("/api/admin/user-add", controller.Admin.UserAddHandler)
 
+	http.HandleFunc("/api/admin/unit-label-history", controller.Admin.UnitLabelHistoryHandler)
+
 	http.HandleFunc("/api/admin/user-remove", controller.Admin.UserRemoveHandler)
 
 	http.HandleFunc("/api/call-upload", controller.Api.CallUploadHandler)
