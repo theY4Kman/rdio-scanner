@@ -23,6 +23,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Add units filtering to search page (find calls with any/all selected units)
 - Add unit label history to unit label dialog
 - Add button to search for calls with unit in unit label dialog
+- Show both the next upcoming calls and the latest received calls in top ticker
 
 ### Fixed
 - Hide trailing "s" in duration col on search page if no row

@@ -134,6 +134,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     queuedCalls: RdioScannerCall[] = [];
     queuedCalls$ = new BehaviorSubject<RdioScannerCall[]>(this.queuedCalls);
 
+    // Computed observables for fading ticker display
+    queuedCallsStart$ = new BehaviorSubject<RdioScannerCall[]>([]);
+    queuedCallsEnd$ = new BehaviorSubject<RdioScannerCall[]>([]);
+    shouldShowFadeTicker$ = new BehaviorSubject<boolean>(false);
+
     map: RdioScannerLivefeedMap = {};
 
     patched = false;
@@ -585,6 +590,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
         if ('queue' in event) {
             this.callQueue = event.queue || 0;
+            if (this.callQueue === 0) {
+                this.updateQueuedCallsSplit([]);
+            }
         }
 
         if ('queueDuration' in event) {
@@ -593,6 +601,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
         if (event.queuedCalls) {
             this.queuedCalls$.next(event.queuedCalls);
+            this.updateQueuedCallsSplit(event.queuedCalls);
         }
 
         if ('time' in event && typeof event.time === 'number') {
@@ -671,6 +680,28 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         if (this.callPrevious) yield this.callPrevious;
         for (const call of this.callHistory) {
             if (call) yield call;
+        }
+    }
+
+    /**
+     * Update the queued calls split for fading ticker display
+     * Shows first 3 calls (left-aligned, fading right) and last 3 calls (right-aligned, fading left)
+     */
+    private updateQueuedCallsSplit(calls: RdioScannerCall[]): void {
+        const FADE_THRESHOLD = 5;
+        const START_COUNT = 3;
+        const END_COUNT = 3;
+
+        if (calls.length > FADE_THRESHOLD) {
+            // Split the calls for fading ticker display
+            this.queuedCallsStart$.next(calls.slice(0, START_COUNT));
+            this.queuedCallsEnd$.next(calls.slice(-END_COUNT));
+            this.shouldShowFadeTicker$.next(true);
+        } else {
+            // Show all calls normally (no fade effect)
+            this.queuedCallsStart$.next(calls);
+            this.queuedCallsEnd$.next([]);
+            this.shouldShowFadeTicker$.next(false);
         }
     }
 

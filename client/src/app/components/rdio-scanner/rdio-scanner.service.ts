@@ -703,7 +703,12 @@ export class RdioScannerService implements OnDestroy {
 
         this.clearQueue();
 
-        this.event.emit({ livefeedMode: this.livefeedMode, queue: 0, queueDuration: 0 });
+        this.event.emit({
+            livefeedMode: this.livefeedMode,
+            queue: 0,
+            queueDuration: 0,
+            queuedCalls: [],
+        });
 
         this.stop();
 

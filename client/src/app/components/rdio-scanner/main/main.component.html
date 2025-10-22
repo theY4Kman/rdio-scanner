@@ -1,14 +1,42 @@
 <ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!isOpen"></ng-keyboard-shortcuts>
 <ng-keyboard-shortcuts-help key="?"></ng-keyboard-shortcuts-help>
 <div class="rdio-status">
-    <div class="queued-calls">
-      <span *ngFor="let call of queuedCalls$ | async; let i = index; first as isFirst">
-        <span *ngIf="!isFirst">, </span>
-        <span class="queued-call">
-          <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
-          <span class="queued-call-tg {{ 'text-led-' + (call.talkgroupData?.led ?? 'green') }}">{{ (call.talkgroupData?.label || call.talkgroupData?.name || call.talkgroup).toString().trim() }}</span>
+    <div class="queued-calls" [class.fading-ticker]="shouldShowFadeTicker$ | async">
+      <!-- Normal display when <= 6 calls -->
+      <ng-container *ngIf="!(shouldShowFadeTicker$ | async)">
+        <span *ngFor="let call of queuedCalls$ | async; let i = index; first as isFirst">
+          <span *ngIf="!isFirst">, </span>
+          <span class="queued-call">
+            <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
+            <span class="queued-call-tg {{ 'text-led-' + (call.talkgroupData?.led ?? 'green') }}">{{ (call.talkgroupData?.label || call.talkgroupData?.name || call.talkgroup).toString().trim() }}</span>
+          </span>
         </span>
-      </span>
+      </ng-container>
+
+      <!-- Fading ticker display when > 6 calls -->
+      <ng-container *ngIf="shouldShowFadeTicker$ | async">
+        <!-- Left side: first 3 calls (fades out on right edge) -->
+        <span class="queue-start">
+          <span *ngFor="let call of queuedCallsStart$ | async; let i = index; first as isFirst">
+            <span *ngIf="!isFirst">, </span>
+            <span class="queued-call">
+              <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
+              <span class="queued-call-tg {{ 'text-led-' + (call.talkgroupData?.led ?? 'green') }}">{{ (call.talkgroupData?.label || call.talkgroupData?.name || call.talkgroup).toString().trim() }}</span>
+            </span>
+          </span>
+        </span>
+
+        <!-- Right side: last 3 calls (fades out on left edge) -->
+        <span class="queue-end">
+          <span *ngFor="let call of queuedCallsEnd$ | async; let i = index; first as isFirst">
+            <span *ngIf="!isFirst">, </span>
+            <span class="queued-call">
+              <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
+              <span class="queued-call-tg {{ 'text-led-' + (call.talkgroupData?.led ?? 'green') }}">{{ (call.talkgroupData?.label || call.talkgroupData?.name || call.talkgroup).toString().trim() }}</span>
+            </span>
+          </span>
+        </span>
+      </ng-container>
     </div>
     <div class="led" [ngClass]="ledStyle"></div>
 </div>

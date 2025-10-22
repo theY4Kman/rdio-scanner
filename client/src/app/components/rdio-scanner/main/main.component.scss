@@ -362,8 +362,19 @@ $led-yellow: rgb(255, 234, 0);
     font-size: 13px;
     font-weight: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+
+    // Normal mode (not fading ticker)
+    &:not(.fading-ticker) {
+      text-overflow: ellipsis;
+    }
+
+    // Fading ticker mode: split left/right with fades
+    &.fading-ticker {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
 
     .queued-call-duration {
       opacity: 0.8;
@@ -376,6 +387,52 @@ $led-yellow: rgb(255, 234, 0);
       &::after {
         opacity: 0.4;
       }
+    }
+
+    // Left side: first 3 calls (fades out on right edge)
+    .queue-start {
+      display: inline-block;
+      max-width: 50%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-align: left;
+
+      // Fade out on the right edge as content approaches 50% width
+      mask-image: linear-gradient(
+        to right,
+        black 0%,
+        black 70%,
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black 0%,
+        black 70%,
+        transparent 100%
+      );
+    }
+
+    // Right side: last 3 calls (fades out on left edge)
+    .queue-end {
+      display: flex;
+      justify-content: flex-end;
+      max-width: 50%;
+      overflow: hidden;
+      white-space: nowrap;
+
+      // Fade out on the left edge as content approaches 50% width
+      mask-image: linear-gradient(
+        to left,
+        black 0%,
+        black 70%,
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to left,
+        black 0%,
+        black 70%,
+        transparent 100%
+      );
     }
   }
 
