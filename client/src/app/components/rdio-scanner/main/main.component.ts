@@ -104,6 +104,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     holdSys = false;
     holdTg = false;
 
+    persistQ = false;
+
     ledStyle = '';
 
     linked = false;
@@ -349,6 +351,17 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         this.updateDimmer();
     }
 
+    persistQueue(): void {
+        if (this.authFocus()) return;
+
+        this.rdioScannerService.beep(
+            this.persistQ ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate
+        );
+        this.rdioScannerService.enableQueuePersist(!this.persistQ);
+
+        this.updateDimmer();
+    }
+
     holdTalkgroup(): void {
         if (this.authFocus()) return;
 
@@ -560,6 +573,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
 
         if ('holdTg' in event) {
             this.holdTg = event.holdTg || false;
+        }
+
+        if ('persistQ' in event) {
+            this.persistQ = event.persistQ || false;
         }
 
         if ('linked' in event) {

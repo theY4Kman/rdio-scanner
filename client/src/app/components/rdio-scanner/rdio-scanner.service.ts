@@ -37,6 +37,7 @@ import {
     RdioScannerLivefeedMap,
     RdioScannerLivefeedMode,
     RdioScannerPlaybackList,
+    RdioScannerQueuePersistState,
     RdioScannerSearchOptions,
     RdioScannerUnitsIndex,
 } from './rdio-scanner';
@@ -53,6 +54,7 @@ enum WebsocketCallFlag {
 }
 
 enum WebsocketCommand {
+    BulkCall = 'BLC',
     Call = 'CAL',
     Config = 'CFG',
     Expired = 'XPR',
@@ -69,6 +71,8 @@ export class RdioScannerService implements OnDestroy {
     static LOCAL_STORAGE_KEY_LEGACY = 'rdio-scanner';
     static LOCAL_STORAGE_KEY_LFM = 'rdio-scanner-lfm';
     static LOCAL_STORAGE_KEY_PIN = 'rdio-scanner-pin';
+    static LOCAL_STORAGE_KEY_QUEUE_PERSIST = 'rdio-scanner-queue-persist';
+    static LOCAL_STORAGE_KEY_QUEUE_PERSIST_ENABLED = 'rdio-scanner-queue-persist-enabled';
 
     event = new EventEmitter<RdioScannerEvent>();
 
@@ -113,6 +117,11 @@ export class RdioScannerService implements OnDestroy {
     private playbackPending: number | undefined;
     private playbackRefreshing = false;
 
+    private queuePersistEnabled = false;
+    private queuePersistPendingBatches: number[][] = [];
+    private queuePersistRestoring = false;
+    private queueRestoreOpportunityConsumed = false;
+
     private skipDelay: Subscription | undefined;
 
     private websocket: WebSocket | undefined;
@@ -127,6 +136,8 @@ export class RdioScannerService implements OnDestroy {
         this.initializeInstanceId();
 
         this.readLivefeedMap();
+
+        this.readQueuePersistEnabled();
 
         this.openWebsocket();
     }
@@ -536,7 +547,7 @@ export class RdioScannerService implements OnDestroy {
             };
             this.audioSource.start();
 
-            this.event.emit({ call: this.call, queue, queueDuration, time: 0 });
+            this.event.emit({ call: this.call, queue, queuedCalls, queueDuration, time: 0 });
 
             interval(100).pipe(takeWhile(() => !!this.call)).subscribe(() => {
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
@@ -611,6 +622,9 @@ export class RdioScannerService implements OnDestroy {
         } else {
             this.play();
         }
+
+        // Auto-save queue state if persistence enabled
+        this.saveQueueState();
     }
 
     replay(): void {
@@ -1006,6 +1020,40 @@ export class RdioScannerService implements OnDestroy {
 
                     break;
 
+                case WebsocketCommand.BulkCall:
+                    if (Array.isArray(message[1])) {
+                        const calls: RdioScannerCall[] = message[1];
+                        const flag: string = message[2];
+
+                        // Add all calls to queue with priority
+                        calls.forEach(call => {
+                            this.queue(this.transformCall(call), { priority: true });
+                        });
+
+                        // If this is the first batch from restoration, clear saved state and pause
+                        if (this.queuePersistRestoring) {
+                            this.queuePersistRestoring = false;
+
+                            // Clear saved queue data now that we've successfully received calls
+                            window?.localStorage?.removeItem(`${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST}-${this.instanceId}`);
+
+                            // Set to paused state after restoration
+                            if (calls.length > 0) {
+                                this.pause(true);
+                            }
+                        }
+
+                        // Request next batch if more pending
+                        if (this.queuePersistPendingBatches.length > 0) {
+                            const nextBatch = this.queuePersistPendingBatches.shift();
+                            if (nextBatch) {
+                                this.sendtoWebsocket(WebsocketCommand.BulkCall, nextBatch, flag);
+                            }
+                        }
+                    }
+
+                    break;
+
                 case WebsocketCommand.Config: {
                     const config = message[1];
 
@@ -1034,13 +1082,23 @@ export class RdioScannerService implements OnDestroy {
                         this.startLivefeed();
                     }
 
+                    // Consume the one-time restoration opportunity on first CFG
+                    if (!this.queueRestoreOpportunityConsumed) {
+                        this.queueRestoreOpportunityConsumed = true;
+                        if (this.queuePersistEnabled) {
+                            this.restoreQueueState();
+                        }
+                    }
+
                     this.event.emit({
                         auth: false,
                         categories: this.categories,
                         config: this.config,
                         holdSys: !!this.livefeedMapPriorToHoldSystem,
                         holdTg: !!this.livefeedMapPriorToHoldTalkgroup,
+                        livefeedMode: this.livefeedMode,
                         map: this.livefeedMap,
+                        persistQ: this.queuePersistEnabled,
                         unitsIndex: this.unitsIndex,
                     });
 
@@ -1315,6 +1373,132 @@ export class RdioScannerService implements OnDestroy {
         }, {});
 
         window?.localStorage?.setItem(`${RdioScannerService.LOCAL_STORAGE_KEY_LFM}-${this.instanceId}`, JSON.stringify(lfm));
+    }
+
+    enableQueuePersist(enabled: boolean): void {
+        this.queuePersistEnabled = enabled;
+
+        // Save toggle state
+        window?.localStorage?.setItem(
+            `${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST_ENABLED}-${this.instanceId}`,
+            JSON.stringify(enabled)
+        );
+
+        if (enabled) {
+            // Save current queue state immediately
+            this.saveQueueState();
+        } else {
+            // Clear saved queue data
+            window?.localStorage?.removeItem(`${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST}-${this.instanceId}`);
+        }
+
+        this.event.emit({
+            persistQ: this.queuePersistEnabled,
+        });
+    }
+
+    private saveQueueState(): void {
+        if (!this.queuePersistEnabled || this.callQueue.length === 0) {
+            return;
+        }
+
+        const state: RdioScannerQueuePersistState = {
+            callIds: this.callQueue.map(call => call.id),
+            timestamp: Date.now(),
+            livefeedMode: this.livefeedMode,
+            livefeedMap: this.livefeedMap,
+        };
+
+        window?.localStorage?.setItem(
+            `${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST}-${this.instanceId}`,
+            JSON.stringify(state)
+        );
+    }
+
+    private restoreQueueState(): void {
+        if (!this.queuePersistEnabled) {
+            return;
+        }
+
+        const savedData = window?.localStorage?.getItem(`${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST}-${this.instanceId}`);
+        if (!savedData) {
+            return;
+        }
+
+        try {
+            const state: RdioScannerQueuePersistState = JSON.parse(savedData);
+
+            // Check 4-hour time limit
+            const fourHoursAgo = Date.now() - (4 * 60 * 60 * 1000);
+            if (state.timestamp < fourHoursAgo) {
+                // Expired - clear saved state
+                window?.localStorage?.removeItem(`${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST}-${this.instanceId}`);
+                return;
+            }
+
+            if (state.callIds && state.callIds.length > 0) {
+                // Restore livefeed state
+                if (state.livefeedMode) {
+                    this.livefeedMode = state.livefeedMode;
+                }
+                if (state.livefeedMap) {
+                    this.livefeedMap = state.livefeedMap;
+                }
+
+                // If livefeed was online, send LFM command to server
+                if (state.livefeedMode === RdioScannerLivefeedMode.Online) {
+                    this.startLivefeed();
+                }
+
+                // Set flag to indicate we're restoring
+                this.queuePersistRestoring = true;
+
+                // Start fetching calls in batches
+                this.fetchCallsBulk(state.callIds);
+
+                // Don't clear saved state yet - wait for first batch to be received
+            }
+        } catch (e) {
+            // Invalid data - clear it
+            window?.localStorage?.removeItem(`${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST}-${this.instanceId}`);
+        }
+    }
+
+    private fetchCallsBulk(ids: number[]): void {
+        if (ids.length === 0) {
+            return;
+        }
+
+        // Split into batches of 25
+        const batchSize = 25;
+        const batches: number[][] = [];
+        for (let i = 0; i < ids.length; i += batchSize) {
+            batches.push(ids.slice(i, i + batchSize));
+        }
+
+        // Store pending batches
+        this.queuePersistPendingBatches = batches.slice(1); // All except first
+
+        // Request first batch immediately (next-up priority)
+        if (batches.length > 0) {
+            this.sendtoWebsocket(WebsocketCommand.BulkCall, batches[0], WebsocketCallFlag.Play);
+        }
+    }
+
+    private readQueuePersistEnabled(): void {
+        const savedEnabled = window?.localStorage?.getItem(
+            `${RdioScannerService.LOCAL_STORAGE_KEY_QUEUE_PERSIST_ENABLED}-${this.instanceId}`
+        );
+
+        if (savedEnabled) {
+            try {
+                this.queuePersistEnabled = JSON.parse(savedEnabled);
+            } catch (e) {
+                this.queuePersistEnabled = false;
+            }
+        }
+
+        // Initial state will be emitted after Config is received
     }
 
     private sendtoWebsocket(command: string, payload?: unknown, flags?: string): void {

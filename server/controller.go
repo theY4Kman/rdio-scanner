@@ -330,6 +330,11 @@ func (controller *Controller) ProcessMessage(client *Client, message *Message) e
 	} else if controller.Accesses.IsRestricted() && client.Access.Systems == nil && message.Command != MessageCommandPin {
 		client.Send <- &Message{Command: MessageCommandPin}
 
+	} else if message.Command == MessageCommandBulkCall {
+		if err := controller.ProcessMessageCommandBulkCall(client, message); err != nil {
+			return err
+		}
+
 	} else if message.Command == MessageCommandCall {
 		if err := controller.ProcessMessageCommandCall(client, message); err != nil {
 			return err
@@ -380,6 +385,69 @@ func (controller *Controller) ProcessMessageCommandCall(client *Client, message 
 
 	if !controller.Accesses.IsRestricted() || client.Access.HasAccess(call) {
 		client.Send <- &Message{Command: MessageCommandCall, Payload: call, Flag: message.Flag}
+	}
+
+	return nil
+}
+
+func (controller *Controller) ProcessMessageCommandBulkCall(client *Client, message *Message) error {
+	const maxBatchSize = 25
+
+	var ids []uint
+
+	// Parse payload into array of IDs
+	switch v := message.Payload.(type) {
+	case []any:
+		ids = make([]uint, 0, len(v))
+		for _, item := range v {
+			switch id := item.(type) {
+			case float64:
+				ids = append(ids, uint(id))
+			case string:
+				if i, err := strconv.Atoi(id); err == nil {
+					ids = append(ids, uint(i))
+				}
+			}
+		}
+	default:
+		return fmt.Errorf("bulk call: invalid payload type %T", v)
+	}
+
+	// Validate batch size
+	if len(ids) == 0 {
+		return fmt.Errorf("bulk call: empty ID list")
+	}
+	if len(ids) > maxBatchSize {
+		return fmt.Errorf("bulk call: batch size %d exceeds maximum %d", len(ids), maxBatchSize)
+	}
+
+	// Fetch calls from database
+	calls, err := controller.Calls.GetCallsBulk(ids, controller.Database)
+	if err != nil {
+		return fmt.Errorf("bulk call: %v", err)
+	}
+
+	// Filter by access control
+	var authorizedCalls []*Call
+	if !controller.Accesses.IsRestricted() {
+		// No restrictions - return all calls
+		authorizedCalls = calls
+	} else {
+		// Apply access control filtering
+		authorizedCalls = make([]*Call, 0, len(calls))
+		for _, call := range calls {
+			if client.Access.HasAccess(call) {
+				authorizedCalls = append(authorizedCalls, call)
+			}
+		}
+	}
+
+	// Send response with all authorized calls
+	// Silently skip unauthorized/missing calls (partial success model)
+	client.Send <- &Message{
+		Command: MessageCommandBulkCall,
+		Payload: authorizedCalls,
+		Flag:    message.Flag,
 	}
 
 	return nil

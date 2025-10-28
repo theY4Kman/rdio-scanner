@@ -228,6 +228,144 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	return &call, nil
 }
 
+func (calls *Calls) GetCallsBulk(ids []uint, db *Database) ([]*Call, error) {
+	if len(ids) == 0 {
+		return []*Call{}, nil
+	}
+
+	calls.mutex.Lock()
+	defer calls.mutex.Unlock()
+
+	// Build WHERE IN clause
+	placeholders := make([]string, len(ids))
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("%v", id)
+	}
+	inClause := strings.Join(placeholders, ", ")
+
+	// Execute bulk query with JOIN to audio table
+	query := fmt.Sprintf(`
+		SELECT
+		    "call"."id",
+		    "audio",
+		    "audioName",
+		    "audioType",
+		    "audioDuration",
+		    "dateTime",
+		    "frequencies",
+		    "frequency",
+		    "patches",
+		    "source",
+		    "sources",
+		    "system",
+		    "talkgroup"
+		FROM "rdioScannerCalls" AS "call"
+		JOIN "rdioScannerCallAudio" AS "callAudio" ON "callAudio"."id" = "call"."id"
+		WHERE "call"."id" IN (%s)
+	`, inClause)
+
+	rows, err := db.Sql.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("getcallsbulk: %v", err)
+	}
+	defer rows.Close()
+
+	// Parse results into map for efficient lookup
+	callsMap := make(map[uint]*Call, len(ids))
+
+	for rows.Next() {
+		var (
+			id          uint
+			audioName   sql.NullString
+			audioType   sql.NullString
+			dateTime    any
+			frequency   sql.NullFloat64
+			source      sql.NullFloat64
+			frequencies string
+			patches     string
+			sources     string
+		)
+
+		call := &Call{}
+
+		err := rows.Scan(
+			&id,
+			&call.Audio,
+			&audioName,
+			&audioType,
+			&call.AudioDuration,
+			&dateTime,
+			&frequencies,
+			&frequency,
+			&patches,
+			&source,
+			&sources,
+			&call.System,
+			&call.Talkgroup,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("getcallsbulk: scan error: %v", err)
+		}
+
+		call.Id = id
+
+		// Parse nullable fields
+		if audioName.Valid {
+			call.AudioName = audioName.String
+		}
+		if audioType.Valid {
+			call.AudioType = audioType.String
+		}
+		if frequency.Valid && frequency.Float64 > 0 {
+			call.Frequency = uint(frequency.Float64)
+		}
+
+		// Parse datetime
+		if t, err := db.ParseDateTime(dateTime); err == nil {
+			call.DateTime = t
+		} else {
+			call.DateTime = time.Time{}
+		}
+
+		// Parse JSON fields
+		if len(frequencies) > 0 {
+			if err = json.Unmarshal([]byte(frequencies), &call.Frequencies); err != nil {
+				call.Frequencies = []any{}
+			}
+		}
+		if len(patches) > 0 {
+			if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
+				call.Patches = []any{}
+			}
+		}
+		if source.Valid && source.Float64 > 0 {
+			call.Source = uint(source.Float64)
+		}
+		if len(sources) > 0 {
+			if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
+				call.Sources = []any{}
+			}
+		}
+
+		callsMap[id] = call
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("getcallsbulk: rows iteration error: %v", err)
+	}
+
+	// Preserve order of requested IDs
+	result := make([]*Call, 0, len(ids))
+	for _, id := range ids {
+		if call, exists := callsMap[id]; exists {
+			result = append(result, call)
+		}
+		// Silently skip missing IDs (partial success model)
+	}
+
+	return result, nil
+}
+
 func (calls *Calls) Prune(db *Database, pruneDays uint) error {
 	calls.mutex.Lock()
 	defer calls.mutex.Unlock()

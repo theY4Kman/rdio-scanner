@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	MessageCommandBulkCall       = "BLC"
 	MessageCommandCall           = "CAL"
 	MessageCommandConfig         = "CFG"
 	MessageCommandExpired        = "XPR"

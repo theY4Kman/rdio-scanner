@@ -121,6 +121,7 @@ export interface RdioScannerEvent {
     map?: RdioScannerLivefeedMap;
     pause?: boolean;
     pausedAt?: Date;
+    persistQ?: boolean;
     playbackList?: RdioScannerPlaybackList;
     playbackPending?: number;
     queue?: number;
@@ -154,6 +155,13 @@ export enum RdioScannerLivefeedMode {
     Offline = 'offline',
     Online = 'online',
     Playback = 'playback',
+}
+
+export interface RdioScannerQueuePersistState {
+    callIds: number[];
+    timestamp: number;
+    livefeedMode: RdioScannerLivefeedMode;
+    livefeedMap: RdioScannerLivefeedMap;
 }
 
 export interface RdioScannerPlaybackList {
