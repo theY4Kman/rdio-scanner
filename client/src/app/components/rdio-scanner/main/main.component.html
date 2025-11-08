@@ -1,10 +1,12 @@
 <ng-keyboard-shortcuts [shortcuts]="shortcuts" [disabled]="!isOpen"></ng-keyboard-shortcuts>
 <ng-keyboard-shortcuts-help key="?"></ng-keyboard-shortcuts-help>
 <div class="rdio-status">
-    <div class="queued-calls" [class.fading-ticker]="shouldShowFadeTicker$ | async">
+    <div class="queued-calls" [class.fading-ticker]="shouldShowFadeTicker$ | async" [@queuedCallsStagger]="(queuedCalls$ | async)?.length">
       <!-- Normal display when <= 6 calls -->
       <ng-container *ngIf="!(shouldShowFadeTicker$ | async)">
-        <span *ngFor="let call of queuedCalls$ | async; let i = index; first as isFirst">
+        <span *ngFor="let call of queuedCalls$ | async; trackBy: trackByCallId; let i = index; first as isFirst"
+              [@queuedCallAnimation]="!prefersReducedMotion"
+              [@queuedCallAnimationReduced]="prefersReducedMotion">
           <span *ngIf="!isFirst">, </span>
           <span class="queued-call">
             <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
@@ -17,7 +19,9 @@
       <ng-container *ngIf="shouldShowFadeTicker$ | async">
         <!-- Left side: first 3 calls (fades out on right edge) -->
         <span class="queue-start">
-          <span *ngFor="let call of queuedCallsStart$ | async; let i = index; first as isFirst">
+          <span *ngFor="let call of queuedCallsStart$ | async; trackBy: trackByCallId; let i = index; first as isFirst"
+                [@queuedCallAnimation]="!prefersReducedMotion"
+                [@queuedCallAnimationReduced]="prefersReducedMotion">
             <span *ngIf="!isFirst">, </span>
             <span class="queued-call">
               <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>
@@ -28,7 +32,9 @@
 
         <!-- Right side: last 3 calls (fades out on left edge) -->
         <span class="queue-end">
-          <span *ngFor="let call of queuedCallsEnd$ | async; let i = index; first as isFirst">
+          <span *ngFor="let call of queuedCallsEnd$ | async; trackBy: trackByCallId; let i = index; first as isFirst"
+                [@queuedCallAnimation]="!prefersReducedMotion"
+                [@queuedCallAnimationReduced]="prefersReducedMotion">
             <span *ngIf="!isFirst">, </span>
             <span class="queued-call">
               <span class="queued-call-duration">{{ call.audioDuration | duration }}</span>

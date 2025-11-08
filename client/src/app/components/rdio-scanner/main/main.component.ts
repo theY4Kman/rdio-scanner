@@ -46,6 +46,11 @@ import {
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 import { RdioScannerAdminService } from '../admin/admin.service';
+import {
+    queuedCallAnimation,
+    queuedCallsStaggerAnimation,
+    queuedCallAnimationReducedMotion,
+} from './main.animations';
 
 type CallSourceDisplayInfo = {
     offsetRem: number;
@@ -60,6 +65,11 @@ type CallSourceDisplayInfo = {
         './main.component.scss',
     ],
     templateUrl: './main.component.html',
+    animations: [
+        queuedCallAnimation,
+        queuedCallsStaggerAnimation,
+        queuedCallAnimationReducedMotion,
+    ],
 })
 export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewInit {
     readonly Math = Math;
@@ -141,6 +151,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
     queuedCallsEnd$ = new BehaviorSubject<RdioScannerCall[]>([]);
     shouldShowFadeTicker$ = new BehaviorSubject<boolean>(false);
 
+    // Detect if user prefers reduced motion for accessibility
+    prefersReducedMotion = false;
+
     map: RdioScannerLivefeedMap = {};
 
     patched = false;
@@ -191,10 +204,30 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit, AfterViewIni
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
         private adminService: RdioScannerAdminService,
-    ) { }
+    ) {
+        // Detect reduced motion preference for accessibility
+        if (typeof window !== 'undefined' && window.matchMedia) {
+            const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+            this.prefersReducedMotion = mediaQuery.matches;
+
+            // Listen for changes to the preference
+            mediaQuery.addEventListener('change', (e) => {
+                this.prefersReducedMotion = e.matches;
+                this.ngChangeDetectorRef.detectChanges();
+            });
+        }
+    }
 
     get isAdminAuthenticated(): boolean {
         return this.adminService.authenticated;
+    }
+
+    /**
+     * TrackBy function for queued calls to maintain element identity
+     * across array updates, enabling proper animations
+     */
+    trackByCallId(index: number, call: RdioScannerCall): number {
+        return call?.id ?? index;
     }
 
     ngAfterViewInit(): void {
