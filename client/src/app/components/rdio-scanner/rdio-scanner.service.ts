@@ -1025,9 +1025,9 @@ export class RdioScannerService implements OnDestroy {
                         const calls: RdioScannerCall[] = message[1];
                         const flag: string = message[2];
 
-                        // Add all calls to queue with priority
+                        // Add all calls to queue (no priority, as if they came in naturally)
                         calls.forEach(call => {
-                            this.queue(this.transformCall(call), { priority: true });
+                            this.queue(this.transformCall(call));
                         });
 
                         // If this is the first batch from restoration, clear saved state and pause
