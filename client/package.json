@@ -40,6 +40,7 @@
     "private": true,
     "scripts": {
         "build": "ng build --base-href ./ --configuration production",
+        "build:debug": "ng build --base-href ./ --configuration debug",
         "start": "ng serve"
     },
     "version": "6.6.3-yak.0.0.1"

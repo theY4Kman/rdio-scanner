@@ -5,7 +5,8 @@ COPY client/package.json client/package-lock.json ./
 RUN npm ci
 
 COPY client/. ./
-RUN npm run build
+ARG BUILD_CONFIG=production
+RUN npm run build -- --configuration ${BUILD_CONFIG}
 
 
 FROM docker.io/golang:1.18-alpine AS binary

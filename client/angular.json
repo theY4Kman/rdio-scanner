@@ -58,7 +58,13 @@
                   "with": "src/environments/environment.prod.ts"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "buildOptimizer": false,
+              "optimization": false,
+              "sourceMap": true,
+              "vendorChunk": true,
+              "extractLicenses": false,
+              "namedChunks": true
             },
             "development": {
               "buildOptimizer": false,
@@ -67,6 +73,21 @@
               "extractLicenses": false,
               "sourceMap": true,
               "namedChunks": true
+            },
+            "debug": {
+              "buildOptimizer": false,
+              "optimization": false,
+              "vendorChunk": true,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "namedChunks": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.debug.ts"
+                }
+              ],
+              "outputHashing": "all"
             }
           },
           "defaultConfiguration": "production"
