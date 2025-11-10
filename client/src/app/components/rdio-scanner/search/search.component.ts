@@ -96,6 +96,10 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
     @ViewChild('unitsSelect', { read: MatSelect }) private unitsSelect: MatSelect | undefined;
     @ViewChild('unitsFilterInput', { read: ElementRef }) private unitsFilterInput: ElementRef<HTMLInputElement> | undefined;
 
+    get livefeedMap() {
+        return this.rdioScannerService['livefeedMap'];
+    }
+
     constructor(
         private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
@@ -354,6 +358,19 @@ export class RdioScannerSearchComponent implements OnDestroy, AfterViewInit {
 
         } else {
             this.rdioScannerService.stop();
+        }
+    }
+
+    toggleTalkgroupSubscription(systemId: number, talkgroupId: number): void {
+        if (!this.config) {
+            return;
+        }
+
+        const system = this.config.systems.find((sys) => sys.id === systemId);
+        const talkgroup = system?.talkgroups.find((tg) => tg.id === talkgroupId);
+
+        if (system && talkgroup) {
+            this.rdioScannerService.avoid({ system, talkgroup });
         }
     }
 

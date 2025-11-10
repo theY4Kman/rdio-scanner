@@ -232,3 +232,59 @@
     }
   }
 }
+
+// LED badge styles
+.talkgroup-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.led-badge {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    top: 0;
+    left: 0;
+  }
+
+  &.off {
+    &::after {
+      background-color: rgb(255, 23, 68);
+      box-shadow: 0 0 4px rgb(255, 23, 68);
+    }
+  }
+
+  &.on {
+    &::after {
+      background-color: rgb(0, 230, 118);
+      box-shadow: 0 0 4px rgb(0, 230, 118);
+    }
+  }
+
+  &:hover::after {
+    box-shadow: 0 0 8px currentColor;
+  }
+}
+
+.talkgroup-label {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

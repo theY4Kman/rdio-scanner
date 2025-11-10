@@ -56,7 +56,21 @@
                 <span>Talkgroup</span>
             </mat-header-cell>
             <mat-cell *matCellDef="let row">
-                <span [title]="row?.talkgroupData?.name">{{ row?.talkgroupData?.label || row?.talkgroup }}</span>
+                <span class="talkgroup-container">
+                    <span
+                        class="led-badge"
+                        [class.off]="!livefeedMap[row?.system]?.[row?.talkgroup]?.active"
+                        [class.on]="livefeedMap[row?.system]?.[row?.talkgroup]?.active"
+                        (click)="toggleTalkgroupSubscription(row?.system, row?.talkgroup)"
+                        [title]="livefeedMap[row?.system]?.[row?.talkgroup]?.active ? 'Subscribed (click to unsubscribe)' : 'Not subscribed (click to subscribe)'">
+                    </span>
+                    <span
+                        class="talkgroup-label"
+                        [title]="row?.talkgroupData?.name"
+                        (click)="toggleTalkgroupSubscription(row?.system, row?.talkgroup)">
+                        {{ row?.talkgroupData?.label || row?.talkgroup }}
+                    </span>
+                </span>
             </mat-cell>
         </ng-container>
         <ng-container matColumnDef="unit">

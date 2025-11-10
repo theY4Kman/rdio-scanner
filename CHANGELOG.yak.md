@@ -26,6 +26,7 @@ I will attempt to retain semantic versioning on the fork version.
 - Show both the next upcoming calls and the latest received calls in top ticker
 - Add PERSIST Q button to save/restore queued calls across reloads
 - Add slide/fade animations to call queue ticker
+- Add TG live feed sub status LED toggle next to TG on search results
 
 ### Fixed
 - Hide trailing "s" in duration col on search page if no row
