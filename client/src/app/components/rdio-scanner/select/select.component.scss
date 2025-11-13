@@ -71,3 +71,149 @@
     width: calc(5% - 4px);
   }
 }
+
+// Units Section Styles
+.units-fieldset {
+  margin-top: 16px;
+
+  legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .info-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+      cursor: help;
+      opacity: 0.7;
+      vertical-align: middle;
+
+      &:hover {
+        opacity: 1;
+      }
+    }
+  }
+}
+
+.units-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px;
+}
+
+.units-search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+
+  @media (min-width: 720px) {
+    flex-direction: row;
+  }
+
+  .units-search-field,
+  .units-dropdown-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  ::ng-deep .mat-form-field-wrapper {
+    padding-bottom: 0;
+  }
+}
+
+.units-dropdown-search {
+  padding: 8px 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 8px;
+
+  .units-dropdown-search-field {
+    width: 100%;
+
+    ::ng-deep .mat-form-field-wrapper {
+      padding-bottom: 8px;
+    }
+  }
+}
+
+.units-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+
+  button {
+    flex: 1 1 auto;
+    min-width: 100px;
+
+    @media (min-width: 720px) {
+      flex: 0 1 auto;
+    }
+  }
+}
+
+.units-led-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.unit-led-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+
+  .rdio-button {
+    width: auto;
+    min-width: 80px;
+    padding-right: 12px;
+  }
+
+  .unit-remove-btn {
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    margin-left: -8px;
+    position: relative;
+    z-index: 1;
+
+    ::ng-deep .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+    }
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+  }
+}
+
+.units-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  gap: 12px;
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}

@@ -25,7 +25,9 @@ import {
     RdioScannerCategoryStatus,
     RdioScannerEvent,
     RdioScannerLivefeedMap,
+    RdioScannerLivefeedUnitsMap,
     RdioScannerSystem,
+    RdioScannerUnit,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 import { ShortcutInput } from "@egoistdeveloper/ng-keyboard-shortcuts";
@@ -49,6 +51,14 @@ export class RdioScannerSelectComponent implements OnDestroy, AfterViewInit {
     tagsToggle: boolean | undefined;
 
     shortcuts: ShortcutInput[] = [];
+
+    // Unit selection properties
+    selectedUnitIndices: number[] = [];
+    selectedUnitDetails: Array<[RdioScannerSystem, RdioScannerUnit]> = [];
+    availableUnits: Array<[RdioScannerSystem, RdioScannerUnit]> = [];
+    filteredUnits: Array<[RdioScannerSystem, RdioScannerUnit]> = [];
+    unitFilterText: string = '';
+    unitsMap: RdioScannerLivefeedUnitsMap = {};
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
@@ -102,12 +112,108 @@ export class RdioScannerSelectComponent implements OnDestroy, AfterViewInit {
         this.rdioScannerService.toggleCategory(category);
     }
 
+    // Unit selection methods
+    filterUnits(): void {
+        const filterText = this.unitFilterText.toLowerCase().trim();
+
+        if (!filterText) {
+            this.filteredUnits = this.availableUnits;
+        } else {
+            this.filteredUnits = this.availableUnits.filter(([system, unit]) => {
+                return unit.label.toLowerCase().includes(filterText) ||
+                       unit.id.toString().includes(filterText);
+            });
+        }
+    }
+
+    getUnitOptionIndex(option: [RdioScannerSystem, RdioScannerUnit]): number {
+        return this.availableUnits.findIndex(([sys, unit]) =>
+            sys.id === option[0].id && unit.id === option[1].id
+        );
+    }
+
+    trackByUnitOption(index: number, option: [RdioScannerSystem, RdioScannerUnit]): string {
+        return `${option[0].id}-${option[1].id}`;
+    }
+
+    private updateSelectedUnitDetails(): void {
+        this.selectedUnitDetails = this.selectedUnitIndices
+            .map(index => this.availableUnits[index])
+            .filter(option => option !== undefined);
+    }
+
+    selectUnit(): void {
+        // Mat-select handles this automatically via binding
+        this.updateSelectedUnitDetails();
+    }
+
+    removeUnit(unitIndex: number): void {
+        this.selectedUnitIndices = this.selectedUnitIndices.filter(idx => idx !== unitIndex);
+        this.updateSelectedUnitDetails();
+    }
+
+    selectAllUnits(): void {
+        const filteredIndices = this.filteredUnits.map(option => this.getUnitOptionIndex(option));
+        const newIndices = Array.from(new Set([...this.selectedUnitIndices, ...filteredIndices]));
+        this.selectedUnitIndices = newIndices;
+        this.updateSelectedUnitDetails();
+    }
+
+    deselectAllUnits(): void {
+        const filteredIndices = new Set(this.filteredUnits.map(option => this.getUnitOptionIndex(option)));
+        this.selectedUnitIndices = this.selectedUnitIndices.filter(idx => !filteredIndices.has(idx));
+        this.updateSelectedUnitDetails();
+    }
+
+    clearAllUnits(): void {
+        this.selectedUnitIndices = [];
+        this.selectedUnitDetails = [];
+        this.unitFilterText = '';
+        this.filterUnits();
+    }
+
+    toggleUnit(unitId: number): void {
+        const isActive = this.unitsMap[unitId];
+        this.rdioScannerService.beep(isActive ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
+        this.rdioScannerService.avoidUnit(unitId);
+    }
+
+    clearUnitFilter(): void {
+        this.unitFilterText = '';
+        this.filterUnits();
+    }
+
+    getUnitLed(system: RdioScannerSystem, unit: RdioScannerUnit): string {
+        return system.led || 'blue';
+    }
+
+    private buildAvailableUnits(): void {
+        if (!this.systems) {
+            this.availableUnits = [];
+            this.filteredUnits = [];
+            this.selectedUnitIndices = [];
+            this.selectedUnitDetails = [];
+            return;
+        }
+
+        this.availableUnits = this.systems
+            .flatMap((system) =>
+                (system.units || []).map((unit) => [system, unit] as [RdioScannerSystem, RdioScannerUnit])
+            )
+            .sort((a, b) => a[1].label.localeCompare(b[1].label));
+
+        this.filterUnits();
+        this.updateSelectedUnitDetails();
+    }
+
     private eventHandler(event: RdioScannerEvent): void {
         if (event.config) {
             this.tagsToggle = event.config.tagsToggle;
             this.systems = event.config.systems;
+            this.buildAvailableUnits();
         }
         if (event.categories) this.categories = event.categories;
         if (event.map) this.map = event.map;
+        if (event.unitsMap) this.unitsMap = event.unitsMap;
     }
 }

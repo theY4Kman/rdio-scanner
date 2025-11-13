@@ -36,6 +36,7 @@ import {
     RdioScannerLivefeed,
     RdioScannerLivefeedMap,
     RdioScannerLivefeedMode,
+    RdioScannerLivefeedUnitsMap,
     RdioScannerPlaybackList,
     RdioScannerQueuePersistState,
     RdioScannerSearchOptions,
@@ -107,6 +108,7 @@ export class RdioScannerService implements OnDestroy {
     private instanceId = 'default';
 
     private livefeedMap = {} as RdioScannerLivefeedMap;
+    private livefeedUnitsMap: RdioScannerLivefeedUnitsMap = {};
     private livefeedMapPriorToHoldSystem: RdioScannerLivefeedMap | undefined;
     private livefeedMapPriorToHoldTalkgroup: RdioScannerLivefeedMap | undefined;
     private livefeedMode = RdioScannerLivefeedMode.Offline;
@@ -136,6 +138,7 @@ export class RdioScannerService implements OnDestroy {
         this.initializeInstanceId();
 
         this.readLivefeedMap();
+        this.readLivefeedUnitsMap();
 
         this.readQueuePersistEnabled();
 
@@ -237,6 +240,26 @@ export class RdioScannerService implements OnDestroy {
             queue: this.callQueue.length,
             queueDuration: this.callQueueDuration,
             queuedCalls: this.callQueue,
+            unitsMap: this.livefeedUnitsMap,
+        });
+    }
+
+    avoidUnit(unitId: number): void {
+        // Toggle the unit's subscription status
+        if (this.livefeedUnitsMap[unitId]) {
+            delete this.livefeedUnitsMap[unitId];
+        } else {
+            this.livefeedUnitsMap[unitId] = true;
+        }
+
+        this.saveLivefeedMap();
+
+        if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
+            this.startLivefeed();
+        }
+
+        this.event.emit({
+            unitsMap: this.livefeedUnitsMap,
         });
     }
 
@@ -339,6 +362,7 @@ export class RdioScannerService implements OnDestroy {
                 queue: this.callQueue.length,
                 queueDuration: this.callQueueDuration,
                 queuedCalls: this.callQueue,
+                unitsMap: this.livefeedUnitsMap,
             });
         }
     }
@@ -392,6 +416,7 @@ export class RdioScannerService implements OnDestroy {
                 queue: this.callQueue.length,
                 queueDuration: this.callQueueDuration,
                 queuedCalls: this.callQueue,
+                unitsMap: this.livefeedUnitsMap,
             });
         }
     }
@@ -685,11 +710,14 @@ export class RdioScannerService implements OnDestroy {
             return sysMap;
         }, {});
 
+        // Add units to the payload
+        const payload = { ...lfm, units: this.livefeedUnitsMap };
+
         this.livefeedMode = RdioScannerLivefeedMode.Online;
 
         this.event.emit({ livefeedMode: this.livefeedMode });
 
-        this.sendtoWebsocket(WebsocketCommand.LivefeedMap, lfm);
+        this.sendtoWebsocket(WebsocketCommand.LivefeedMap, payload);
     }
 
     stop(options?: { emit?: boolean }): void {
@@ -796,6 +824,7 @@ export class RdioScannerService implements OnDestroy {
                 queue: this.callQueue.length,
                 queueDuration: this.callQueueDuration,
                 queuedCalls: this.callQueue,
+                unitsMap: this.livefeedUnitsMap,
             });
         }
     }
@@ -1100,6 +1129,7 @@ export class RdioScannerService implements OnDestroy {
                         map: this.livefeedMap,
                         persistQ: this.queuePersistEnabled,
                         unitsIndex: this.unitsIndex,
+                        unitsMap: this.livefeedUnitsMap,
                     });
 
                     break;
@@ -1258,6 +1288,24 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
+    private readLivefeedUnitsMap(): void {
+        try {
+            const store = window?.localStorage?.getItem(`rdio-scanner-lfm-units-${this.instanceId}`);
+
+            if (store !== null) {
+                this.livefeedUnitsMap = JSON.parse(store);
+            }
+
+            // Ensure it's a valid object
+            if (typeof this.livefeedUnitsMap !== 'object' || this.livefeedUnitsMap === null) {
+                this.livefeedUnitsMap = {};
+            }
+
+        } catch (_) {
+            this.livefeedUnitsMap = {};
+        }
+    }
+
     private rebuildCategories(): void {
         this.categories = Object.keys(this.config.groups || []).map((label) => {
             const allOff = Object.keys(this.config.groups[label]).map((sys) => +sys)
@@ -1373,6 +1421,9 @@ export class RdioScannerService implements OnDestroy {
         }, {});
 
         window?.localStorage?.setItem(`${RdioScannerService.LOCAL_STORAGE_KEY_LFM}-${this.instanceId}`, JSON.stringify(lfm));
+
+        // Save units map separately
+        window?.localStorage?.setItem(`rdio-scanner-lfm-units-${this.instanceId}`, JSON.stringify(this.livefeedUnitsMap));
     }
 
     enableQueuePersist(enabled: boolean): void {
@@ -1407,6 +1458,7 @@ export class RdioScannerService implements OnDestroy {
             timestamp: Date.now(),
             livefeedMode: this.livefeedMode,
             livefeedMap: this.livefeedMap,
+            livefeedUnitsMap: this.livefeedUnitsMap,
         };
 
         window?.localStorage?.setItem(
@@ -1443,6 +1495,9 @@ export class RdioScannerService implements OnDestroy {
                 }
                 if (state.livefeedMap) {
                     this.livefeedMap = state.livefeedMap;
+                }
+                if (state.livefeedUnitsMap) {
+                    this.livefeedUnitsMap = state.livefeedUnitsMap;
                 }
 
                 // If livefeed was online, send LFM command to server

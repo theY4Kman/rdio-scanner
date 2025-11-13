@@ -38,3 +38,151 @@
 <ng-container *ngIf="systems?.length === 0">
     No talkgroup configured!
 </ng-container>
+
+<!-- Units Section -->
+<fieldset class="fieldset units-fieldset">
+    <legend>
+        Units
+        <mat-icon
+            class="info-icon"
+            inline="true"
+            matTooltip="Subscribe to calls that include specific units"
+            matTooltipPosition="right">
+            info_outline
+        </mat-icon>
+    </legend>
+
+    <div class="units-content">
+        <!-- Search Input Section -->
+        <div class="units-search-section">
+            <mat-form-field appearance="outline" class="units-search-field">
+                <mat-label>Search units by name or ID...</mat-label>
+                <input
+                    matInput
+                    [(ngModel)]="unitFilterText"
+                    (ngModelChange)="filterUnits()"
+                    placeholder="Search units by name or ID..."
+                    autocomplete="off">
+                <button
+                    mat-icon-button
+                    matSuffix
+                    *ngIf="unitFilterText"
+                    (click)="clearUnitFilter()"
+                    aria-label="Clear filter"
+                    type="button">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </mat-form-field>
+
+            <!-- Unit Selection Dropdown -->
+            <mat-form-field appearance="outline" class="units-dropdown-field">
+                <mat-label>Select units to monitor...</mat-label>
+                <mat-select
+                    multiple
+                    [(ngModel)]="selectedUnitIndices"
+                    (ngModelChange)="selectUnit()"
+                    [disabled]="filteredUnits.length === 0">
+                    <mat-select-trigger>
+                        <span *ngIf="selectedUnitDetails.length === 0">No units selected</span>
+                        <span *ngIf="selectedUnitDetails.length === 1">1 unit selected</span>
+                        <span *ngIf="selectedUnitDetails.length > 1">{{ selectedUnitDetails.length }} units selected</span>
+                    </mat-select-trigger>
+
+                    <!-- Search input inside dropdown -->
+                    <div class="units-dropdown-search">
+                        <mat-form-field appearance="fill" class="units-dropdown-search-field">
+                            <mat-label>Filter units</mat-label>
+                            <input
+                                matInput
+                                [(ngModel)]="unitFilterText"
+                                (ngModelChange)="filterUnits()"
+                                placeholder="Search by name or ID"
+                                autocomplete="off"
+                                (click)="$event.stopPropagation()"
+                                (keydown)="$event.stopPropagation()">
+                            <button
+                                mat-icon-button
+                                matSuffix
+                                *ngIf="unitFilterText"
+                                (click)="clearUnitFilter(); $event.stopPropagation()"
+                                aria-label="Clear filter"
+                                type="button">
+                                <mat-icon>close</mat-icon>
+                            </button>
+                        </mat-form-field>
+                    </div>
+
+                    <!-- Show flat list of all filtered units -->
+                    <mat-option
+                        *ngFor="let systemUnit of filteredUnits; trackBy: trackByUnitOption"
+                        [value]="getUnitOptionIndex(systemUnit)">
+                        <span class="unit-system-prefix" *ngIf="systems && systems.length > 1">
+                            [{{ systemUnit[0].label }}]
+                        </span>
+                        {{ systemUnit[1].label }}
+                    </mat-option>
+                </mat-select>
+            </mat-form-field>
+        </div>
+
+        <!-- Bulk Action Buttons -->
+        <div class="units-bulk-actions">
+            <button
+                mat-raised-button
+                color="primary"
+                (click)="selectAllUnits()"
+                [disabled]="filteredUnits.length === 0"
+                type="button">
+                Select All
+            </button>
+            <button
+                mat-raised-button
+                (click)="deselectAllUnits()"
+                [disabled]="filteredUnits.length === 0 || selectedUnitDetails.length === 0"
+                type="button">
+                Deselect All
+            </button>
+            <button
+                mat-raised-button
+                (click)="clearAllUnits()"
+                [disabled]="selectedUnitDetails.length === 0"
+                type="button">
+                Clear All
+            </button>
+        </div>
+
+        <!-- Selected Units Display (LED Buttons) -->
+        <div *ngIf="selectedUnitDetails.length > 0" class="units-led-section">
+            <ng-container *ngFor="let systemUnit of selectedUnitDetails; let idx = index; trackBy: trackByUnitOption">
+                <div class="unit-led-container">
+                    <button
+                        class="rdio-button"
+                        [ngClass]="{
+                            off: unitsMap[systemUnit[1].id] === false || unitsMap[systemUnit[1].id] === undefined,
+                            on: unitsMap[systemUnit[1].id] === true
+                        }"
+                        [style.--led-color]="getUnitLed(systemUnit[0], systemUnit[1])"
+                        [title]="systemUnit[1].label"
+                        (click)="toggleUnit(systemUnit[1].id)"
+                        type="button">
+                        {{ systemUnit[1].label }}
+                    </button>
+                    <button
+                        mat-icon-button
+                        class="unit-remove-btn"
+                        (click)="removeUnit(selectedUnitIndices[idx])"
+                        [title]="'Remove ' + systemUnit[1].label"
+                        type="button">
+                        <mat-icon>close</mat-icon>
+                    </button>
+                </div>
+            </ng-container>
+        </div>
+
+        <!-- Empty State -->
+        <div *ngIf="selectedUnitDetails.length === 0" class="units-empty-state">
+            <mat-icon>info_outline</mat-icon>
+            <p>No units selected. Use the dropdown above to select units to monitor.</p>
+        </div>
+    </div>
+</fieldset>

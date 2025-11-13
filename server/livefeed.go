@@ -22,12 +22,14 @@ import (
 
 type Livefeed struct {
 	Matrix map[uint]map[uint]bool
+	Units  map[uint]bool
 	mutex  sync.Mutex
 }
 
 func NewLivefeed() *Livefeed {
 	return &Livefeed{
 		Matrix: map[uint]map[uint]bool{},
+		Units:  map[uint]bool{},
 		mutex:  sync.Mutex{},
 	}
 }
@@ -40,9 +42,32 @@ func (livefeed *Livefeed) FromMap(f any) *Livefeed {
 		delete(livefeed.Matrix, s)
 	}
 
+	for u := range livefeed.Units {
+		delete(livefeed.Units, u)
+	}
+
 	switch v := f.(type) {
 	case map[string]any:
+		// Parse units if present
+		if units, ok := v["units"]; ok {
+			switch unitsMap := units.(type) {
+			case map[string]any:
+				for u, b := range unitsMap {
+					switch enabled := b.(type) {
+					case bool:
+						if unitId, err := strconv.Atoi(u); err == nil {
+							livefeed.Units[uint(unitId)] = enabled
+						}
+					}
+				}
+			}
+		}
+
+		// Parse systems/talkgroups
 		for s, n := range v {
+			if s == "units" {
+				continue // Already processed above
+			}
 			if sysId, err := strconv.Atoi(s); err == nil {
 				sysId := uint(sysId)
 				switch v := n.(type) {
@@ -79,6 +104,12 @@ func (livefeed *Livefeed) IsAllOff() bool {
 		}
 	}
 
+	for _, enabled := range livefeed.Units {
+		if enabled {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -87,14 +118,39 @@ func (livefeed *Livefeed) IsEnabled(call *Call) bool {
 	defer livefeed.mutex.Unlock()
 
 	if call != nil {
+		// Check if talkgroup is subscribed
 		if livefeed.Matrix[call.System][call.Talkgroup] {
 			return true
-		} else {
-			switch v := call.Patches.(type) {
-			case []uint:
-				for _, p := range v {
-					if livefeed.Matrix[call.System][p] {
-						return true
+		}
+
+		// Check patches
+		switch v := call.Patches.(type) {
+		case []uint:
+			for _, p := range v {
+				if livefeed.Matrix[call.System][p] {
+					return true
+				}
+			}
+		}
+
+		// Check if any source unit is subscribed
+		switch sources := call.Sources.(type) {
+		case []map[string]any:
+			for _, sourceMap := range sources {
+				if src, ok := sourceMap["src"]; ok {
+					switch unitId := src.(type) {
+					case uint:
+						if livefeed.Units[unitId] {
+							return true
+						}
+					case float64:
+						if livefeed.Units[uint(unitId)] {
+							return true
+						}
+					case int:
+						if livefeed.Units[uint(unitId)] {
+							return true
+						}
 					}
 				}
 			}
