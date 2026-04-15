@@ -6,6 +6,7 @@ I will attempt to retain semantic versioning on the fork version.
 ## Unreleased
 ### Changed
 - Upgrade Node.js from 21 to 24 LTS in Dockerfile
+- Upgrade Go from 1.18 to 1.26 in Dockerfile and go.mod
 
 ### Added
 - Show prev/current/next units in main display
