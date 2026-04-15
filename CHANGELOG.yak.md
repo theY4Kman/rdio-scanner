@@ -4,6 +4,9 @@ Since I occasionally pull in upstream changes, the original changelog will remai
 I will attempt to retain semantic versioning on the fork version.
 
 ## Unreleased
+### Changed
+- Upgrade Node.js from 21 to 24 LTS in Dockerfile
+
 ### Added
 - Show prev/current/next units in main display
 - Click prev/current/next unit metadata to seek within call
