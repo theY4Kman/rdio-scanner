@@ -1,0 +1,1693 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+import { create } from 'zustand';
+import { AudioManager } from '../services/audio';
+import { WebSocketCallFlag, WebSocketCommand } from '../services/websocket';
+import type {
+    AvoidOptions,
+    Beep,
+    BeepStyle,
+    Call,
+    CallSource,
+    Category,
+    CategoryStatus,
+    Config,
+    KeypadBeeps,
+    Livefeed,
+    LivefeedMap,
+    LivefeedUnitsMap,
+    PlaybackList,
+    QueuePersistState,
+    SearchOptions,
+    System,
+    UnitsIndex,
+} from '../types/scanner';
+import {
+    BeepStyle as BeepStyleEnum,
+    CategoryStatus as CatStatus,
+    CategoryType,
+    LivefeedMode,
+} from '../types/scanner';
+import {
+    clearPin,
+    clearQueueState,
+    getInstanceId,
+    readLivefeedMap,
+    readLivefeedUnitsMap,
+    readPin,
+    readQueuePersistEnabled,
+    readQueueState,
+    saveLivefeedMap,
+    saveLivefeedUnitsMap,
+    savePin,
+    saveQueuePersistEnabled,
+    saveQueueState,
+} from '../utils/storage';
+
+declare global {
+    interface Window {
+        webkitAudioContext: typeof AudioContext;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level audio state (mirrors the Angular service's private fields)
+// ---------------------------------------------------------------------------
+
+let audioContext: AudioContext | undefined;
+let audioSource: AudioBufferSourceNode | undefined;
+let audioBuffer: AudioBuffer | undefined;
+let audioSourceStartTime = NaN;
+let audioTimeInterval: ReturnType<typeof setInterval> | undefined;
+let beepContext: AudioContext | undefined;
+let audioBootstrapped = false;
+
+// ---------------------------------------------------------------------------
+// Module-level connection & timer state
+// ---------------------------------------------------------------------------
+
+let ws: WebSocket | undefined;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let skipDelayTimer: ReturnType<typeof setTimeout> | undefined;
+
+// ---------------------------------------------------------------------------
+// Module-level internal state (Angular service private fields not in Zustand)
+// ---------------------------------------------------------------------------
+
+let livefeedMapPriorToHoldSystem: LivefeedMap | undefined;
+let livefeedMapPriorToHoldTalkgroup: LivefeedMap | undefined;
+let playbackRefreshing = false;
+let queuePersistPendingBatches: number[][] = [];
+let queuePersistRestoring = false;
+let queueRestoreOpportunityConsumed = false;
+let instanceId = 'default';
+let pendingPassword = '';
+
+// AudioManager is only used for beep() (oscillator logic)
+const audioManager = new AudioManager();
+
+// ---------------------------------------------------------------------------
+// Store interface
+// ---------------------------------------------------------------------------
+
+export interface ScannerState {
+    // Connection
+    linked: boolean;
+
+    // Config
+    config: Config;
+    unitsIndex: UnitsIndex;
+
+    // Auth
+    authRequired: boolean;
+    authExpired: boolean;
+    authTooMany: boolean;
+
+    // Livefeed
+    livefeedMode: LivefeedMode;
+    livefeedMap: LivefeedMap;
+    livefeedUnitsMap: LivefeedUnitsMap;
+    categories: Category[];
+
+    // Playback
+    call: Call | null;
+    callPrevious: Call | null;
+    callQueue: Call[];
+    callTime: number;
+    paused: boolean;
+    pausedAt: Date | null;
+
+    // Hold
+    holdSys: boolean;
+    holdTg: boolean;
+
+    // Queue persist
+    queuePersistEnabled: boolean;
+
+    // Listeners
+    listeners: number;
+
+    // Search/Playback
+    playbackList: PlaybackList | null;
+    playbackPending: number | null;
+}
+
+export interface ScannerActions {
+    initialize(): void;
+    destroy(): void;
+    authenticate(password: string): void;
+    avoid(options?: AvoidOptions): void;
+    avoidUnit(unitId: number): void;
+    isAvoided(call: Call): boolean;
+    isAvoidedTimer(call: Call): number;
+    isPatched(call: Call): boolean;
+    beep(style?: BeepStyle): Promise<void>;
+    holdSystem(options?: { resubscribe?: boolean }): void;
+    holdTalkgroup(options?: { resubscribe?: boolean }): void;
+    livefeed(): void;
+    startLivefeed(): void;
+    stopLivefeed(): void;
+    stopPlaybackMode(): void;
+    loadAndDownload(id: number): void;
+    loadAndPlay(id: number): boolean;
+    pause(status?: boolean): void;
+    play(call?: Call): boolean;
+    queue(call: Call, options?: { priority?: boolean }): void;
+    replay(): void;
+    seek(seconds: number): boolean;
+    skip(options?: { delay?: boolean }): boolean;
+    searchCalls(options: SearchOptions): void;
+    toggleCategory(category: Category): void;
+    enableQueuePersist(enabled: boolean): void;
+}
+
+// ---------------------------------------------------------------------------
+// Shorthand accessors for the store (used by module-level helpers)
+// ---------------------------------------------------------------------------
+
+function $get(): ScannerState & ScannerActions {
+    return useScannerStore.getState();
+}
+
+function $set(partial: Partial<ScannerState>): void {
+    useScannerStore.setState(partial);
+}
+
+// ---------------------------------------------------------------------------
+// Default config
+// ---------------------------------------------------------------------------
+
+const defaultConfig: Config = {
+    dimmerDelay: false,
+    groups: {},
+    keypadBeeps: false,
+    playbackGoesLive: false,
+    showListenersCount: false,
+    systems: [],
+    tags: {},
+    tagsToggle: false,
+    time12hFormat: false,
+};
+
+// ---------------------------------------------------------------------------
+// WebSocket helpers
+// ---------------------------------------------------------------------------
+
+function wsSend(command: string, payload?: unknown, flags?: string): void {
+    if (ws?.readyState !== WebSocket.OPEN) {
+        return;
+    }
+
+    const message: unknown[] = [command];
+    if (payload) {
+        message.push(payload);
+    }
+    if (flags !== null && flags !== undefined) {
+        message.push(flags);
+    }
+    ws.send(JSON.stringify(message));
+}
+
+function openWebSocket(): void {
+    const websocketUrl = window.location.href.replace(/^http/, 'ws');
+
+    ws = new WebSocket(websocketUrl);
+
+    ws.onclose = (ev: CloseEvent) => {
+        $set({ linked: false });
+
+        if (ev.code !== 1000) {
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = undefined;
+                closeWebSocket();
+                openWebSocket();
+            }, 2000);
+        }
+    };
+
+    ws.onopen = () => {
+        $set({ linked: true });
+
+        if (ws) {
+            ws.onmessage = (ev: MessageEvent) => {
+                let message: unknown;
+                try {
+                    message = JSON.parse(ev.data as string);
+                } catch (error) {
+                    console.warn(`Invalid control message received, ${error}`);
+                    return;
+                }
+
+                if (Array.isArray(message)) {
+                    const [command, payload, flags] = message;
+                    parseMessage(command as string, payload, flags as string | undefined);
+                }
+            };
+        }
+
+        wsSend(WebSocketCommand.Version);
+        wsSend(WebSocketCommand.Config);
+    };
+
+    ws.onerror = () => {
+        // Error handling is done via onclose
+    };
+}
+
+function closeWebSocket(): void {
+    if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+    }
+
+    if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.onopen = null;
+        ws.close();
+        ws = undefined;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Audio bootstrap (mirrors Angular service bootstrapAudio)
+// ---------------------------------------------------------------------------
+
+function bootstrapAudio(): void {
+    if (audioBootstrapped) {
+        return;
+    }
+    audioBootstrapped = true;
+
+    const events = ['keydown', 'mousedown', 'touchstart'] as const;
+
+    const bootstrap = async () => {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+        }
+
+        if (!beepContext) {
+            beepContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+        }
+
+        if (audioContext) {
+            const resume = () => {
+                if (!$get().paused) {
+                    if (audioContext?.state === 'suspended') {
+                        audioContext?.resume().then(() => resume());
+                    }
+                }
+            };
+
+            await audioContext.resume();
+            audioContext.onstatechange = () => resume();
+        }
+
+        if (beepContext) {
+            const resume = () => {
+                if (beepContext?.state === 'suspended') {
+                    beepContext?.resume().then(() => resume());
+                }
+            };
+
+            await beepContext.resume();
+            beepContext.onstatechange = () => resume();
+        }
+
+        if (audioContext && beepContext) {
+            events.forEach((event) => document.body.removeEventListener(event, bootstrap));
+        }
+    };
+
+    events.forEach((event) => document.body.addEventListener(event, bootstrap));
+}
+
+// ---------------------------------------------------------------------------
+// Audio stop (mirrors Angular service stop())
+// ---------------------------------------------------------------------------
+
+function stopAudio(options?: { emit?: boolean }): void {
+    if (audioTimeInterval !== undefined) {
+        clearInterval(audioTimeInterval);
+        audioTimeInterval = undefined;
+    }
+
+    if (audioSource) {
+        audioSource.onended = null;
+        audioSource.stop();
+        audioSource.disconnect();
+        audioSource = undefined;
+        audioSourceStartTime = NaN;
+    }
+
+    audioBuffer = undefined;
+
+    const state = $get();
+    if (state.call) {
+        $set({ callPrevious: state.call, call: null });
+    }
+
+    if (typeof options?.emit !== 'boolean' || options.emit) {
+        $set({ call: null });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Queue helpers
+// ---------------------------------------------------------------------------
+
+function cleanQueue(): void {
+    const state = $get();
+
+    const isActive = (call: Call): boolean => {
+        const lfmCheck = (sys: number, tg: number): boolean =>
+            !!state.livefeedMap && !!state.livefeedMap[sys] && !!state.livefeedMap[sys][tg]?.active;
+
+        let active = lfmCheck(call.system, call.talkgroup);
+        if (!active && Array.isArray(call.patches)) {
+            for (let i = 0; i < call.patches.length; i++) {
+                active = lfmCheck(call.system, call.patches[i]!);
+                if (active) {
+                    break;
+                }
+            }
+        }
+        return active;
+    };
+
+    const filtered = state.callQueue.filter((call: Call) => isActive(call));
+    $set({ callQueue: filtered });
+
+    if (state.call && !isActive(state.call)) {
+        $get().skip();
+    }
+}
+
+function clearQueue(): void {
+    $set({ callQueue: [] });
+}
+
+// ---------------------------------------------------------------------------
+// Download helper
+// ---------------------------------------------------------------------------
+
+function download(call: Call): void {
+    if (call.audio) {
+        const file = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
+        const fileName = call.audioName || 'unknown.dat';
+        const fileType = call.audioType || 'audio/*';
+        const fileUri = `data:${fileType};base64,${window.btoa(file)}`;
+
+        const el = document.createElement('a');
+        el.style.display = 'none';
+        el.setAttribute('href', fileUri);
+        el.setAttribute('download', fileName);
+
+        document.body.appendChild(el);
+        el.click();
+        document.body.removeChild(el);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Call fetching
+// ---------------------------------------------------------------------------
+
+function getCall(id: number, flags?: WebSocketCallFlag): void {
+    wsSend(WebSocketCommand.Call, `${id}`, flags);
+}
+
+// ---------------------------------------------------------------------------
+// Queue duration helpers
+// ---------------------------------------------------------------------------
+
+export function getCallQueueDuration(): number {
+    return $get().callQueue
+        .map((call) => call.audioDuration || 0)
+        .reduce((sum, duration) => sum + duration, 0);
+}
+
+export function getPlaybackQueueCount(id?: number): number {
+    const state = $get();
+    const resolvedId = id ?? state.call?.id ?? state.callPrevious?.id;
+    let queueCount = 0;
+
+    if (resolvedId && state.playbackList) {
+        const index = state.playbackList.results.findIndex((call) => call.id === resolvedId);
+
+        if (index !== -1) {
+            if (state.playbackList.options.sort === -1) {
+                queueCount = state.playbackList.options.offset + index;
+            } else {
+                queueCount = state.playbackList.count - state.playbackList.options.offset - index - 1;
+            }
+        }
+    }
+
+    return queueCount;
+}
+
+export function getPlaybackQueueDuration(id?: number): number {
+    const state = $get();
+    const resolvedId = id ?? state.call?.id ?? state.callPrevious?.id;
+    let queueDuration = 0;
+
+    if (resolvedId && state.playbackList) {
+        const index = state.playbackList.results.findIndex((call) => call.id === resolvedId);
+
+        if (index !== -1) {
+            if (state.playbackList.options.sort === -1) {
+                queueDuration = state.playbackList.results.slice(0, index)
+                    .map((call) => call.audioDuration || 0)
+                    .reduce((sum, duration) => sum + duration, 0);
+            } else {
+                queueDuration = state.playbackList.results.slice(index + 1)
+                    .map((call) => call.audioDuration || 0)
+                    .reduce((sum, duration) => sum + duration, 0);
+            }
+        }
+    }
+
+    return queueDuration;
+}
+
+// ---------------------------------------------------------------------------
+// Transform call (attach system/talkgroup metadata + unit labels)
+// ---------------------------------------------------------------------------
+
+function transformCall(call: Call): Call {
+    const state = $get();
+
+    if (call && Array.isArray(state.config?.systems)) {
+        call.systemData = state.config.systems.find((system) => system.id === call.system);
+
+        if (Array.isArray(call.systemData?.talkgroups)) {
+            call.talkgroupData = call.systemData?.talkgroups.find((talkgroup) => talkgroup.id === call.talkgroup);
+        }
+
+        if (call.talkgroupData?.frequency) {
+            call.frequency = call.talkgroupData.frequency;
+        }
+
+        if (Array.isArray(call.sources)) {
+            const sysUnits = state.unitsIndex[call.system] ?? {};
+            call.sources = call.sources.map((source: CallSource) => {
+                if (source.src != null) {
+                    source.label = sysUnits[source.src];
+                }
+                return source;
+            });
+        }
+    }
+
+    return call;
+}
+
+// ---------------------------------------------------------------------------
+// Unit label propagation
+// ---------------------------------------------------------------------------
+
+function propagateUnitLabels(): void {
+    const state = $get();
+    const calls: (Call | null)[] = [state.call, state.callPrevious, ...state.callQueue];
+    for (const call of calls) {
+        if (call) {
+            propagateUnitLabelsInCall(call);
+        }
+    }
+}
+
+function propagateUnitLabelsInCall(call: Call): void {
+    if (!call || !Array.isArray(call.sources)) return;
+    const state = $get();
+
+    call.sources.forEach((source) => {
+        if (typeof source.src !== 'number') return;
+        source.label = state.unitsIndex?.[call.system]?.[source.src];
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Category rebuilding
+// ---------------------------------------------------------------------------
+
+function rebuildCategories(): void {
+    const state = $get();
+    const config = state.config;
+    const lfm = state.livefeedMap;
+
+    let categories: Category[] = Object.keys(config.groups || []).map((label) => {
+        const groupEntry = config.groups[label]!;
+        const allOff = Object.keys(groupEntry).map((sys) => +sys)
+            .every((sys: number) => groupEntry[sys]
+                ?.every((tg) => lfm[sys] && !lfm[sys]![tg]!.active) ?? true);
+
+        const allOn = Object.keys(groupEntry).map((sys) => +sys)
+            .every((sys: number) => groupEntry[sys]
+                ?.every((tg) => lfm[sys] && lfm[sys]![tg]!.active) ?? true);
+
+        const status: CategoryStatus = allOff ? CatStatus.Off : allOn ? CatStatus.On : CatStatus.Partial;
+
+        return { label, status, type: CategoryType.Group };
+    });
+
+    if (config.tagsToggle) {
+        categories = categories.concat(Object.keys(config.tags || []).map((label) => {
+            const tagEntry = config.tags[label]!;
+            const allOff = Object.keys(tagEntry).map((sys) => +sys)
+                .every((sys: number) => tagEntry[sys]
+                    ?.every((tg) => lfm[sys] && !lfm[sys]![tg]!.active) ?? true);
+
+            const allOn = Object.keys(tagEntry).map((sys) => +sys)
+                .every((sys: number) => tagEntry[sys]
+                    ?.every((tg) => lfm[sys] && lfm[sys]![tg]!.active) ?? true);
+
+            const status: CategoryStatus = allOff ? CatStatus.Off : allOn ? CatStatus.On : CatStatus.Partial;
+
+            return { label, status, type: CategoryType.Tag };
+        }));
+    }
+
+    categories.sort((a, b) => a.label.localeCompare(b.label));
+
+    $set({ categories });
+}
+
+// ---------------------------------------------------------------------------
+// Livefeed map rebuilding
+// ---------------------------------------------------------------------------
+
+function rebuildLivefeedMap(): void {
+    const state = $get();
+    const config = state.config;
+    const currentLfm = state.livefeedMap;
+    const currentCategories = state.categories;
+
+    const lfm = config.systems.reduce((sysMap, sys) => {
+        sysMap[sys.id] = sys.talkgroups.reduce((tgMap, tg) => {
+            const group = currentCategories.find((cat) => cat.label === tg.group);
+            const tag = currentCategories.find((cat) => cat.label === tg.tag);
+
+            tgMap[tg.id] = (currentLfm[sys.id] && currentLfm[sys.id]![tg.id])
+                ? currentLfm[sys.id]![tg.id]!
+                : {
+                    active: !(group?.status === CatStatus.Off || tag?.status === CatStatus.Off),
+                } as Livefeed;
+
+            return tgMap;
+        }, sysMap[sys.id] || {} as { [key: number]: Livefeed });
+        return sysMap;
+    }, {} as LivefeedMap);
+
+    if (livefeedMapPriorToHoldSystem != null) {
+        livefeedMapPriorToHoldSystem = lfm;
+    } else if (livefeedMapPriorToHoldTalkgroup != null) {
+        livefeedMapPriorToHoldTalkgroup = lfm;
+    } else {
+        $set({ livefeedMap: lfm });
+    }
+
+    doSaveLivefeedMap();
+    rebuildCategories();
+}
+
+// ---------------------------------------------------------------------------
+// Units index rebuilding
+// ---------------------------------------------------------------------------
+
+function rebuildUnitsIndex(): void {
+    const state = $get();
+    const unitsIndex = state.config.systems.reduce((idx, sys) => {
+        if (!idx[sys.id]) idx[sys.id] = {};
+
+        sys.units.forEach((unit) => {
+            idx[sys.id]![unit.id] = unit.label;
+        });
+        return idx;
+    }, {} as UnitsIndex);
+
+    $set({ unitsIndex });
+}
+
+// ---------------------------------------------------------------------------
+// localStorage save helpers
+// ---------------------------------------------------------------------------
+
+function doSaveLivefeedMap(): void {
+    const state = $get();
+    const lfm = Object.keys(state.livefeedMap).reduce((sysMap: { [key: number]: { [key: number]: boolean } }, sys: string) => {
+        sysMap[+sys] = Object.keys(state.livefeedMap[+sys]!).reduce((tgMap: { [key: number]: boolean }, tg: string) => {
+            tgMap[+tg] = state.livefeedMap[+sys]![+tg]!.active;
+            return tgMap;
+        }, {});
+        return sysMap;
+    }, {});
+
+    saveLivefeedMap(instanceId, lfm);
+    saveLivefeedUnitsMap(instanceId, state.livefeedUnitsMap);
+}
+
+function doSaveQueueState(): void {
+    const state = $get();
+    if (!state.queuePersistEnabled || state.callQueue.length === 0) {
+        return;
+    }
+
+    const persistState: QueuePersistState = {
+        callIds: state.callQueue.map((call) => call.id),
+        timestamp: Date.now(),
+        livefeedMode: state.livefeedMode,
+        livefeedMap: state.livefeedMap,
+        livefeedUnitsMap: state.livefeedUnitsMap,
+    };
+
+    saveQueueState(instanceId, persistState);
+}
+
+// ---------------------------------------------------------------------------
+// Queue persistence restore
+// ---------------------------------------------------------------------------
+
+function restoreQueueState(): void {
+    const state = $get();
+    if (!state.queuePersistEnabled) {
+        return;
+    }
+
+    const savedState = readQueueState(instanceId);
+    if (!savedState) {
+        return;
+    }
+
+    // Check 4-hour time limit
+    const fourHoursAgo = Date.now() - (4 * 60 * 60 * 1000);
+    if (savedState.timestamp < fourHoursAgo) {
+        clearQueueState(instanceId);
+        return;
+    }
+
+    if (savedState.callIds && savedState.callIds.length > 0) {
+        if (savedState.livefeedMode) {
+            $set({ livefeedMode: savedState.livefeedMode });
+        }
+        if (savedState.livefeedMap) {
+            $set({ livefeedMap: savedState.livefeedMap });
+        }
+        if (savedState.livefeedUnitsMap) {
+            $set({ livefeedUnitsMap: savedState.livefeedUnitsMap });
+        }
+
+        if (savedState.livefeedMode === LivefeedMode.Online) {
+            $get().startLivefeed();
+        }
+
+        queuePersistRestoring = true;
+
+        fetchCallsBulk(savedState.callIds);
+    }
+}
+
+function fetchCallsBulk(ids: number[]): void {
+    if (ids.length === 0) {
+        return;
+    }
+
+    const batchSize = 25;
+    const batches: number[][] = [];
+    for (let i = 0; i < ids.length; i += batchSize) {
+        batches.push(ids.slice(i, i + batchSize));
+    }
+
+    queuePersistPendingBatches = batches.slice(1);
+
+    if (batches.length > 0) {
+        wsSend(WebSocketCommand.BulkCall, batches[0], WebSocketCallFlag.Play);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Playback navigation
+// ---------------------------------------------------------------------------
+
+function playbackNextCall(): boolean {
+    const state = $get();
+
+    if (state.call || state.livefeedMode !== LivefeedMode.Playback || !state.playbackList || state.playbackPending) {
+        return false;
+    }
+
+    const index = state.playbackList.results.findIndex((call) => call.id === state.callPrevious?.id);
+
+    if (state.playbackList.options.sort === -1) {
+        if (index === -1) {
+            return $get().loadAndPlay(state.playbackList.results[state.playbackList.results.length - 1]!.id);
+        }
+
+        if (index === 0) {
+            if (state.playbackList.options.offset < state.playbackList.options.limit) {
+                if (playbackRefreshing) {
+                    $get().stopPlaybackMode();
+
+                    if (state.config.playbackGoesLive) {
+                        $get().startLivefeed();
+                    }
+                } else {
+                    playbackRefreshing = true;
+                    $get().searchCalls(state.playbackList.options);
+                }
+
+                return false;
+            }
+
+            $get().searchCalls({
+                ...state.playbackList.options,
+                offset: state.playbackList.options.offset - state.playbackList.options.limit,
+            });
+            return false;
+        }
+
+        return $get().loadAndPlay(state.playbackList.results[index - 1]!.id);
+    }
+
+    if (index === -1) {
+        return $get().loadAndPlay(state.playbackList.results[0]!.id);
+
+    } else if (index === state.playbackList.results.length - 1) {
+        if (state.playbackList.options.offset < (state.playbackList.count - state.playbackList.options.limit)) {
+            $get().searchCalls({
+                ...state.playbackList.options,
+                offset: state.playbackList.options.offset + state.playbackList.options.limit,
+            });
+        } else if (playbackRefreshing) {
+            $get().stopPlaybackMode();
+
+            if (state.config.playbackGoesLive) {
+                $get().startLivefeed();
+            }
+        } else {
+            playbackRefreshing = true;
+            $get().searchCalls(state.playbackList.options);
+        }
+
+        return false;
+    }
+
+    return $get().loadAndPlay(state.playbackList.results[index + 1]!.id);
+}
+
+// ---------------------------------------------------------------------------
+// parseMessage — the big switch statement from parseWebsocketMessage
+// ---------------------------------------------------------------------------
+
+function parseMessage(command: string, payload: unknown, flags?: string): void {
+    switch (command) {
+        case WebSocketCommand.Call: {
+            if (payload !== null) {
+                const call = payload as Call;
+                const flag = flags;
+
+                if (flag === WebSocketCallFlag.Download) {
+                    download(payload as Call);
+                } else if (flag === WebSocketCallFlag.Play && call.id === $get().playbackPending) {
+                    $set({ playbackPending: null });
+                    $get().queue(transformCall(call), { priority: true });
+                } else {
+                    $get().queue(transformCall(call));
+                }
+            }
+            break;
+        }
+
+        case WebSocketCommand.BulkCall: {
+            if (Array.isArray(payload)) {
+                const calls = payload as Call[];
+
+                calls.forEach((call) => {
+                    $get().queue(transformCall(call));
+                });
+
+                if (queuePersistRestoring) {
+                    queuePersistRestoring = false;
+
+                    clearQueueState(instanceId);
+
+                    if (calls.length > 0) {
+                        $get().pause(true);
+                    }
+                }
+
+                if (queuePersistPendingBatches.length > 0) {
+                    const nextBatch = queuePersistPendingBatches.shift();
+                    if (nextBatch) {
+                        wsSend(WebSocketCommand.BulkCall, nextBatch, flags);
+                    }
+                }
+            }
+            break;
+        }
+
+        case WebSocketCommand.Config: {
+            const rawConfig = payload as Record<string, unknown>;
+
+            const config: Config = {
+                branding: typeof rawConfig.branding === 'string' ? rawConfig.branding : '',
+                dimmerDelay: typeof rawConfig.dimmerDelay === 'number' ? rawConfig.dimmerDelay : 5000,
+                groups: rawConfig.groups !== null && typeof rawConfig.groups === 'object'
+                    ? rawConfig.groups as Config['groups'] : {},
+                keypadBeeps: rawConfig.keypadBeeps !== null && typeof rawConfig.keypadBeeps === 'object'
+                    ? rawConfig.keypadBeeps as KeypadBeeps : false,
+                playbackGoesLive: typeof rawConfig.playbackGoesLive === 'boolean'
+                    ? rawConfig.playbackGoesLive : false,
+                showListenersCount: typeof rawConfig.showListenersCount === 'boolean'
+                    ? rawConfig.showListenersCount : false,
+                systems: Array.isArray(rawConfig.systems) ? (rawConfig.systems as System[]).slice() : [],
+                tags: rawConfig.tags !== null && typeof rawConfig.tags === 'object'
+                    ? rawConfig.tags as Config['tags'] : {},
+                tagsToggle: typeof rawConfig.tagsToggle === 'boolean' ? rawConfig.tagsToggle : false,
+                time12hFormat: typeof rawConfig.time12hFormat === 'boolean' ? rawConfig.time12hFormat : false,
+            };
+
+            if (typeof rawConfig.afs === 'string' && (rawConfig.afs as string).length) {
+                config.afs = rawConfig.afs as string;
+            }
+
+            $set({ config });
+
+            rebuildLivefeedMap();
+            rebuildUnitsIndex();
+            propagateUnitLabels();
+
+            const state = $get();
+
+            if (state.livefeedMode === LivefeedMode.Online) {
+                state.startLivefeed();
+            }
+
+            // Consume the one-time restoration opportunity on first CFG
+            if (!queueRestoreOpportunityConsumed) {
+                queueRestoreOpportunityConsumed = true;
+                if ($get().queuePersistEnabled) {
+                    restoreQueueState();
+                }
+            }
+
+            // Save the password that got us authenticated
+            if (pendingPassword) {
+                savePin(pendingPassword);
+                pendingPassword = '';
+            }
+
+            $set({
+                authRequired: false,
+                holdSys: !!livefeedMapPriorToHoldSystem,
+                holdTg: !!livefeedMapPriorToHoldTalkgroup,
+            });
+
+            break;
+        }
+
+        case WebSocketCommand.Expired:
+            $set({ authRequired: true, authExpired: true });
+            break;
+
+        case WebSocketCommand.ListCall: {
+            const list = payload as PlaybackList | null;
+
+            if (list) {
+                list.results = list.results.map((call) => transformCall(call));
+                $set({ playbackList: list });
+
+                if ($get().livefeedMode === LivefeedMode.Playback) {
+                    playbackNextCall();
+                }
+            }
+
+            break;
+        }
+
+        case WebSocketCommand.ListenersCount:
+            $set({ listeners: payload as number });
+            break;
+
+        case WebSocketCommand.Max:
+            $set({ authRequired: true, authTooMany: true });
+            break;
+
+        case WebSocketCommand.Pin: {
+            // Try auto-authenticating from saved PIN
+            const savedPin = readPin();
+            if (savedPin) {
+                clearPin();
+                pendingPassword = savedPin;
+                wsSend(WebSocketCommand.Pin, window.btoa(savedPin));
+            } else {
+                $set({ authRequired: true });
+            }
+            break;
+        }
+
+        case WebSocketCommand.Version: {
+            const data = payload as Record<string, unknown> | null;
+
+            if (data !== null && typeof data === 'object') {
+                const branding = data['branding'];
+
+                if (typeof branding === 'string') {
+                    const state = $get();
+                    $set({ config: { ...state.config, branding } });
+                }
+            }
+
+            break;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Initial livefeed map hydration from localStorage
+// ---------------------------------------------------------------------------
+
+function readAndHydrateLivefeedMap(): LivefeedMap {
+    const stored = readLivefeedMap(instanceId);
+    const lfm: LivefeedMap = {};
+
+    Object.keys(stored).forEach((sys: string) => {
+        const sysEntry = stored[+sys];
+        if (!sysEntry) return;
+        Object.keys(sysEntry).forEach((tg: string) => {
+            if (!lfm[+sys]) lfm[+sys] = {};
+            if (!lfm[+sys]![+tg]) lfm[+sys]![+tg] = {} as Livefeed;
+            lfm[+sys]![+tg]!.active = sysEntry[+tg] ?? false;
+        });
+    });
+
+    return lfm;
+}
+
+// ---------------------------------------------------------------------------
+// Compute initial state from localStorage
+// ---------------------------------------------------------------------------
+
+instanceId = getInstanceId();
+const initialLfm = readAndHydrateLivefeedMap();
+const initialUnitsMap = readLivefeedUnitsMap(instanceId);
+const initialQueuePersistEnabled = readQueuePersistEnabled(instanceId);
+
+// ---------------------------------------------------------------------------
+// Store creation
+// ---------------------------------------------------------------------------
+
+export const useScannerStore = create<ScannerState & ScannerActions>()((set, get) => ({
+    // -- State ---------------------------------------------------------------
+    linked: false,
+    config: defaultConfig,
+    unitsIndex: {},
+    authRequired: false,
+    authExpired: false,
+    authTooMany: false,
+    livefeedMode: LivefeedMode.Offline,
+    livefeedMap: initialLfm,
+    livefeedUnitsMap: initialUnitsMap,
+    categories: [],
+    call: null,
+    callPrevious: null,
+    callQueue: [],
+    callTime: 0,
+    paused: false,
+    pausedAt: null,
+    holdSys: false,
+    holdTg: false,
+    queuePersistEnabled: initialQueuePersistEnabled,
+    listeners: 0,
+    playbackList: null,
+    playbackPending: null,
+
+    // -- Actions -------------------------------------------------------------
+
+    initialize(): void {
+        bootstrapAudio();
+        openWebSocket();
+    },
+
+    destroy(): void {
+        closeWebSocket();
+        stopAudio();
+
+        if (skipDelayTimer !== undefined) {
+            clearTimeout(skipDelayTimer);
+            skipDelayTimer = undefined;
+        }
+
+        livefeedMapPriorToHoldSystem = undefined;
+        livefeedMapPriorToHoldTalkgroup = undefined;
+        playbackRefreshing = false;
+        queuePersistPendingBatches = [];
+        queuePersistRestoring = false;
+        queueRestoreOpportunityConsumed = false;
+    },
+
+    authenticate(password: string): void {
+        pendingPassword = password;
+        wsSend(WebSocketCommand.Pin, window.btoa(password));
+    },
+
+    avoid(options: AvoidOptions = {}): void {
+        const state = get();
+        const lfm = state.livefeedMap;
+
+        const clearTimer = (livefeed: Livefeed): void => {
+            livefeed.minutes = undefined;
+            if (livefeed.timer !== undefined) {
+                clearTimeout(livefeed.timer);
+                livefeed.timer = undefined;
+            }
+        };
+
+        const setTimer = (livefeed: Livefeed, minutes: number): void => {
+            livefeed.minutes = minutes;
+            livefeed.timer = setTimeout(() => {
+                livefeed.active = true;
+                livefeed.minutes = undefined;
+                livefeed.timer = undefined;
+
+                rebuildCategories();
+                doSaveLivefeedMap();
+
+                // Force re-render by updating the map reference
+                set({ livefeedMap: { ...$get().livefeedMap } });
+            }, minutes * 60 * 1000);
+        };
+
+        if (livefeedMapPriorToHoldSystem) {
+            livefeedMapPriorToHoldSystem = undefined;
+        }
+
+        if (livefeedMapPriorToHoldTalkgroup) {
+            livefeedMapPriorToHoldTalkgroup = undefined;
+        }
+
+        if (typeof options.all === 'boolean') {
+            Object.keys(lfm).map((sys: string) => +sys).forEach((sys: number) => {
+                Object.keys(lfm[sys]!).map((tg: string) => +tg).forEach((tg: number) => {
+                    const livefeed = lfm[sys]![tg]!;
+                    clearTimer(livefeed);
+                    livefeed.active = typeof options.status === 'boolean' ? options.status : !!options.all;
+                });
+            });
+
+        } else if (options.call) {
+            const livefeed = lfm[options.call.system]![options.call.talkgroup]!;
+            clearTimer(livefeed);
+            livefeed.active = typeof options.status === 'boolean' ? options.status : !livefeed.active;
+            if (typeof options.minutes === 'number') setTimer(livefeed, options.minutes);
+
+        } else if (options.system && options.talkgroup) {
+            const livefeed = lfm[options.system.id]![options.talkgroup.id]!;
+            clearTimer(livefeed);
+            livefeed.active = typeof options.status === 'boolean' ? options.status : !livefeed.active;
+            if (typeof options.minutes === 'number') setTimer(livefeed, options.minutes);
+
+        } else if (options.system && !options.talkgroup) {
+            const sys = options.system.id;
+            Object.keys(lfm[sys]!).map((tg: string) => +tg).forEach((tg: number) => {
+                const livefeed = lfm[sys]![tg]!;
+                clearTimer(livefeed);
+                livefeed.active = typeof options.status === 'boolean' ? options.status : !livefeed.active;
+            });
+
+        } else {
+            const call = state.call || state.callPrevious;
+            if (call) {
+                const livefeed = lfm[call.system]![call.talkgroup]!;
+                clearTimer(livefeed);
+                livefeed.active = typeof options.status === 'boolean' ? options.status : !livefeed.active;
+                if (typeof options.minutes === 'number') setTimer(livefeed, options.minutes);
+            }
+        }
+
+        set({ livefeedMap: { ...lfm } });
+
+        if (get().livefeedMode !== LivefeedMode.Playback) {
+            cleanQueue();
+        }
+
+        rebuildCategories();
+        doSaveLivefeedMap();
+
+        if (get().livefeedMode === LivefeedMode.Online) {
+            get().startLivefeed();
+        }
+
+        set({
+            holdSys: false,
+            holdTg: false,
+        });
+    },
+
+    avoidUnit(unitId: number): void {
+        const state = get();
+        const newUnitsMap = { ...state.livefeedUnitsMap };
+
+        if (newUnitsMap[unitId]) {
+            delete newUnitsMap[unitId];
+        } else {
+            newUnitsMap[unitId] = true;
+        }
+
+        set({ livefeedUnitsMap: newUnitsMap });
+
+        doSaveLivefeedMap();
+
+        if (get().livefeedMode === LivefeedMode.Online) {
+            get().startLivefeed();
+        }
+    },
+
+    isAvoided(call: Call): boolean {
+        const state = get();
+        return !!state.livefeedMap[call.system] && state.livefeedMap[call.system]![call.talkgroup]?.active !== true;
+    },
+
+    isAvoidedTimer(call: Call): number {
+        const state = get();
+        if (!!state.livefeedMap[call.system] && state.livefeedMap[call.system]![call.talkgroup]?.minutes !== undefined) {
+            return state.livefeedMap[call.system]![call.talkgroup]?.minutes || 0;
+        }
+        return 0;
+    },
+
+    isPatched(call: Call): boolean {
+        const state = get();
+        return get().isAvoided(call) && call.patches.some((tg) => {
+            return !!state.livefeedMap[call.system] && (state.livefeedMap[call.system]![tg]?.active || false);
+        });
+    },
+
+    beep(style: BeepStyle = BeepStyleEnum.Activate): Promise<void> {
+        const state = get();
+        if (!state.config.keypadBeeps) {
+            return Promise.resolve();
+        }
+
+        return audioManager.beep(style, state.config.keypadBeeps as unknown as Record<string, Beep[]>);
+    },
+
+    holdSystem(options?: { resubscribe?: boolean }): void {
+        const state = get();
+        const call = state.call || state.callPrevious;
+
+        if (call && state.livefeedMap) {
+            if (livefeedMapPriorToHoldSystem) {
+                set({ livefeedMap: livefeedMapPriorToHoldSystem });
+                livefeedMapPriorToHoldSystem = undefined;
+
+            } else {
+                if (livefeedMapPriorToHoldTalkgroup) {
+                    get().holdTalkgroup({ resubscribe: false });
+                }
+
+                livefeedMapPriorToHoldSystem = state.livefeedMap;
+
+                const currentLfm = get().livefeedMap;
+
+                const newLfm = Object.keys(currentLfm).map((sys) => +sys).reduce((sysMap, sys) => {
+                    const sysLfm = currentLfm[sys]!;
+                    const allOn = Object.keys(sysLfm).map((tg) => +tg)
+                        .every((tg) => !sysLfm[tg]);
+
+                    sysMap[sys] = Object.keys(sysLfm).map((tg) => +tg).reduce((tgMap, tg) => {
+                        if (sysLfm[tg]!.timer !== undefined) {
+                            clearTimeout(sysLfm[tg]!.timer);
+                        }
+
+                        tgMap[tg] = {
+                            active: sys === call.system ? allOn || sysLfm[tg]!.active : false,
+                        } as Livefeed;
+
+                        return tgMap;
+                    }, {} as { [key: number]: Livefeed });
+
+                    return sysMap;
+                }, {} as LivefeedMap);
+
+                set({ livefeedMap: newLfm });
+
+                cleanQueue();
+            }
+
+            rebuildCategories();
+
+            if (typeof options?.resubscribe !== 'boolean' || options.resubscribe) {
+                if (get().livefeedMode === LivefeedMode.Online) {
+                    get().startLivefeed();
+                }
+            }
+
+            set({
+                holdSys: !!livefeedMapPriorToHoldSystem,
+                holdTg: false,
+            });
+        }
+    },
+
+    holdTalkgroup(options?: { resubscribe?: boolean }): void {
+        const state = get();
+        const call = state.call || state.callPrevious;
+
+        if (call && state.livefeedMap) {
+            if (livefeedMapPriorToHoldTalkgroup) {
+                set({ livefeedMap: livefeedMapPriorToHoldTalkgroup });
+                livefeedMapPriorToHoldTalkgroup = undefined;
+
+            } else {
+                if (livefeedMapPriorToHoldSystem) {
+                    get().holdSystem({ resubscribe: false });
+                }
+
+                livefeedMapPriorToHoldTalkgroup = state.livefeedMap;
+
+                const currentLfm = get().livefeedMap;
+
+                const newLfm = Object.keys(currentLfm).map((sys) => +sys).reduce((sysMap, sys) => {
+                    const sysLfm = currentLfm[sys]!;
+                    sysMap[sys] = Object.keys(sysLfm).map((tg) => +tg).reduce((tgMap, tg) => {
+                        if (sysLfm[tg]!.timer !== undefined) {
+                            clearTimeout(sysLfm[tg]!.timer);
+                        }
+
+                        tgMap[tg] = {
+                            active: sys === call.system ? tg === call.talkgroup : false,
+                        } as Livefeed;
+
+                        return tgMap;
+                    }, {} as { [key: number]: Livefeed });
+
+                    return sysMap;
+                }, {} as LivefeedMap);
+
+                set({ livefeedMap: newLfm });
+
+                cleanQueue();
+            }
+
+            rebuildCategories();
+
+            if (typeof options?.resubscribe !== 'boolean' || options.resubscribe) {
+                if (get().livefeedMode === LivefeedMode.Online) {
+                    get().startLivefeed();
+                }
+            }
+
+            set({
+                holdSys: false,
+                holdTg: !!livefeedMapPriorToHoldTalkgroup,
+            });
+        }
+    },
+
+    livefeed(): void {
+        const state = get();
+        if (state.livefeedMode === LivefeedMode.Offline) {
+            get().startLivefeed();
+        } else if (state.livefeedMode === LivefeedMode.Online) {
+            get().stopLivefeed();
+        } else if (state.livefeedMode === LivefeedMode.Playback) {
+            get().stopPlaybackMode();
+        }
+    },
+
+    loadAndDownload(id: number): void {
+        if (!id) {
+            return;
+        }
+        getCall(id, WebSocketCallFlag.Download);
+    },
+
+    loadAndPlay(id: number): boolean {
+        if (!id) {
+            return false;
+        }
+
+        if (skipDelayTimer !== undefined) {
+            clearTimeout(skipDelayTimer);
+            skipDelayTimer = undefined;
+        }
+
+        set({ playbackPending: id });
+
+        stopAudio();
+
+        const state = get();
+
+        if (state.livefeedMode === LivefeedMode.Offline) {
+            set({ livefeedMode: LivefeedMode.Playback });
+
+            if (livefeedMapPriorToHoldSystem) {
+                get().holdSystem({ resubscribe: false });
+            }
+
+            if (livefeedMapPriorToHoldTalkgroup) {
+                get().holdTalkgroup({ resubscribe: false });
+            }
+        }
+
+        getCall(id, WebSocketCallFlag.Play);
+        return true;
+    },
+
+    pause(status?: boolean): void {
+        const state = get();
+        const newPaused = status !== undefined ? status : !state.paused;
+
+        if (newPaused) {
+            set({
+                paused: true,
+                pausedAt: new Date(),
+            });
+
+            void audioContext?.suspend();
+        } else {
+            set({
+                paused: false,
+                pausedAt: null,
+            });
+
+            void audioContext?.resume();
+
+            get().play();
+        }
+    },
+
+    play(call?: Call): boolean {
+        const state = get();
+
+        if (state.paused || skipDelayTimer !== undefined) {
+            return false;
+        }
+
+        let currentCall: Call | null = null;
+
+        if (call?.audio) {
+            if (state.call) {
+                stopAudio({ emit: false });
+            }
+            currentCall = call;
+
+        } else if (state.call) {
+            return false;
+
+        } else {
+            const queue = [...state.callQueue];
+            currentCall = queue.shift() || null;
+            set({ callQueue: queue });
+        }
+
+        if (!currentCall?.audio) {
+            return false;
+        }
+
+        set({ call: currentCall });
+
+        // In the Angular service, queueCount and queueDuration are emitted.
+        // In Zustand, consumers derive these from state directly.
+
+        const audioData = currentCall.audio.data;
+        const arrayBuffer = new ArrayBuffer(audioData.length);
+        const arrayBufferView = new Uint8Array(arrayBuffer);
+
+        for (let i = 0; i < audioData.length; i++) {
+            arrayBufferView[i] = audioData[i]!;
+        }
+
+        audioContext?.decodeAudioData(arrayBuffer, (buffer) => {
+            if (!audioContext || audioSource || !get().call) {
+                return;
+            }
+
+            audioBuffer = buffer;
+            audioSource = audioContext.createBufferSource();
+            audioSource.buffer = buffer;
+            audioSource.connect(audioContext.destination);
+            audioSource.onended = () => {
+                set({ callTime: buffer.duration });
+                get().skip({ delay: true });
+            };
+            audioSource.start();
+
+            set({ callTime: 0 });
+
+            // Start time update interval (replaces RxJS interval(100))
+            if (audioTimeInterval !== undefined) {
+                clearInterval(audioTimeInterval);
+            }
+
+            // Update time at ~4Hz (250ms) to avoid excessive re-renders.
+            // The Angular version used 100ms with RxJS (no React re-render overhead).
+            audioTimeInterval = setInterval(() => {
+                if (!get().call) {
+                    if (audioTimeInterval !== undefined) {
+                        clearInterval(audioTimeInterval);
+                        audioTimeInterval = undefined;
+                    }
+                    return;
+                }
+
+                if (audioContext && !isNaN(audioContext.currentTime)) {
+                    if (isNaN(audioSourceStartTime)) {
+                        audioSourceStartTime = audioContext.currentTime;
+                    }
+
+                    if (!get().paused) {
+                        set({ callTime: audioContext.currentTime - audioSourceStartTime });
+                    }
+                }
+            }, 250);
+        }, () => {
+            // Decode error -- skip
+            get().skip({ delay: false });
+        });
+
+        return true;
+    },
+
+    queue(call: Call, options?: { priority?: boolean }): void {
+        const state = get();
+
+        if (!call?.audio || state.livefeedMode === LivefeedMode.Offline) {
+            return;
+        }
+
+        let newQueue: Call[];
+        if (options?.priority) {
+            newQueue = [call, ...state.callQueue];
+        } else {
+            newQueue = [...state.callQueue, call];
+        }
+
+        set({ callQueue: newQueue });
+
+        if (audioSource || state.call || state.paused || skipDelayTimer !== undefined) {
+            // Don't auto-play; queue update is reflected in state
+        } else {
+            get().play();
+        }
+
+        doSaveQueueState();
+    },
+
+    replay(): void {
+        const state = get();
+        get().play(state.call || state.callPrevious || undefined);
+    },
+
+    searchCalls(options: SearchOptions): void {
+        wsSend(WebSocketCommand.ListCall, options);
+    },
+
+    seek(seconds: number): boolean {
+        const state = get();
+
+        if (!state.call || !audioSource || !audioContext || !audioBuffer) {
+            return false;
+        }
+
+        const prevOnEnded = audioSource.onended;
+        audioSource.onended = null;
+        audioSource.stop();
+
+        audioSource = audioContext.createBufferSource();
+        audioSource.buffer = audioBuffer;
+        audioSource.connect(audioContext.destination);
+        audioSource.onended = prevOnEnded;
+        audioSource.start(0, seconds);
+
+        audioSourceStartTime = audioContext.currentTime - seconds;
+        set({ callTime: seconds });
+
+        return true;
+    },
+
+    skip(options?: { delay?: boolean }): boolean {
+        const playNext = (): boolean => {
+            if (get().livefeedMode === LivefeedMode.Playback) {
+                return playbackNextCall();
+            } else {
+                return get().play();
+            }
+        };
+
+        stopAudio();
+
+        if (options?.delay) {
+            skipDelayTimer = setTimeout(() => {
+                skipDelayTimer = undefined;
+                playNext();
+            }, 1000);
+            return true;
+
+        } else {
+            if (skipDelayTimer !== undefined) {
+                clearTimeout(skipDelayTimer);
+                skipDelayTimer = undefined;
+            }
+
+            return playNext();
+        }
+    },
+
+    startLivefeed(): void {
+        const state = get();
+
+        const lfm = Object.keys(state.livefeedMap).reduce(
+            (sysMap: { [key: number]: { [key: number]: boolean } }, sys) => {
+                sysMap[+sys] = Object.keys(state.livefeedMap[+sys]!).reduce(
+                    (tgMap: { [key: number]: boolean }, tg: string) => {
+                        tgMap[+tg] = state.livefeedMap[+sys]![+tg]!.active;
+                        return tgMap;
+                    }, {},
+                );
+                return sysMap;
+            }, {},
+        );
+
+        const payload = { ...lfm, units: state.livefeedUnitsMap };
+
+        set({ livefeedMode: LivefeedMode.Online });
+
+        wsSend(WebSocketCommand.LivefeedMap, payload);
+    },
+
+    stopLivefeed(): void {
+        set({ livefeedMode: LivefeedMode.Offline });
+
+        clearQueue();
+
+        stopAudio();
+
+        wsSend(WebSocketCommand.LivefeedMap, null);
+    },
+
+    stopPlaybackMode(): void {
+        set({ livefeedMode: LivefeedMode.Offline, playbackList: null });
+
+        playbackRefreshing = false;
+
+        clearQueue();
+
+        stopAudio();
+    },
+
+    toggleCategory(category: Category): void {
+        if (!category) {
+            return;
+        }
+
+        const state = get();
+        const lfm = state.livefeedMap;
+
+        const clearTimer = (livefeed: Livefeed): void => {
+            livefeed.minutes = 0;
+            if (livefeed.timer !== undefined) {
+                clearTimeout(livefeed.timer);
+                livefeed.timer = undefined;
+            }
+        };
+
+        if (livefeedMapPriorToHoldSystem) {
+            livefeedMapPriorToHoldSystem = undefined;
+        }
+
+        if (livefeedMapPriorToHoldTalkgroup) {
+            livefeedMapPriorToHoldTalkgroup = undefined;
+        }
+
+        const status = category.status !== CatStatus.On;
+
+        state.config?.systems.forEach((sys) => {
+            sys.talkgroups?.forEach((tg) => {
+                const livefeed = lfm[sys.id]?.[tg.id];
+                if (!livefeed) return;
+
+                if (category.type === CategoryType.Group && tg.group === category.label) {
+                    clearTimer(livefeed);
+                    livefeed.active = status;
+                } else if (category.type === CategoryType.Tag && tg.tag === category.label) {
+                    clearTimer(livefeed);
+                    livefeed.active = status;
+                }
+            });
+        });
+
+        set({ livefeedMap: { ...lfm } });
+
+        rebuildCategories();
+
+        if (state.call && !lfm[state.call.system] && lfm[state.call.system]?.[state.call.talkgroup]) {
+            clearTimer(lfm[state.call.system]![state.call.talkgroup]!);
+            get().skip();
+        }
+
+        if (get().livefeedMode === LivefeedMode.Online) {
+            get().startLivefeed();
+        }
+
+        doSaveLivefeedMap();
+
+        cleanQueue();
+
+        set({
+            holdSys: false,
+            holdTg: false,
+        });
+    },
+
+    enableQueuePersist(enabled: boolean): void {
+        set({ queuePersistEnabled: enabled });
+
+        saveQueuePersistEnabled(instanceId, enabled);
+
+        if (enabled) {
+            doSaveQueueState();
+        } else {
+            clearQueueState(instanceId);
+        }
+    },
+}));

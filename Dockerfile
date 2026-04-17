@@ -1,12 +1,11 @@
 FROM node:24-slim AS client
 WORKDIR /app
 
-COPY client/package.json client/package-lock.json ./
+COPY client-react/package.json client-react/package-lock.json ./
 RUN npm ci
 
-COPY client/. ./
-ARG BUILD_CONFIG=production
-RUN npm run build -- --configuration ${BUILD_CONFIG}
+COPY client-react/. ./
+RUN npm run build
 
 
 FROM docker.io/golang:1.26-alpine AS binary
