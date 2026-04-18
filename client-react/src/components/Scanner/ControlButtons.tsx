@@ -123,7 +123,6 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
   const livefeedMode = useScannerStore((s) => s.livefeedMode);
   const paused = useScannerStore((s) => s.paused);
   const pausedAt = useScannerStore((s) => s.pausedAt);
-  const holdSys = useScannerStore((s) => s.holdSys);
   const holdTg = useScannerStore((s) => s.holdTg);
   const queuePersistEnabled = useScannerStore((s) => s.queuePersistEnabled);
   const call = useScannerStore((s) => s.call);
@@ -204,16 +203,6 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
     store.skip();
   }, [authRequired, store]);
 
-  const handleHoldSystem = useCallback(() => {
-    if (authRequired) return;
-    if (call || callPrevious) {
-      store.beep(holdSys ? BeepStyle.Deactivate : BeepStyle.Activate);
-      store.holdSystem();
-    } else {
-      store.beep(BeepStyle.Denied);
-    }
-  }, [authRequired, call, callPrevious, holdSys, store]);
-
   const handleHoldTalkgroup = useCallback(() => {
     if (authRequired) return;
     if (call || callPrevious) {
@@ -253,7 +242,7 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
 
   return (
     <Box>
-      {/* Row 1: LIVE FEED, PERSIST Q, HOLD SYS, HOLD TG */}
+      {/* Row 1: LIVE FEED, PERSIST Q, HOLD TG */}
       <Box sx={rowSx}>
         <RetroButton
           label="Live Feed"
@@ -278,12 +267,6 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
           label="Persist Q"
           state={queuePersistEnabled ? 'on' : 'off'}
           onClick={handlePersistQueue}
-        />
-        <Box sx={spacerSx} />
-        <RetroButton
-          label="Hold Sys"
-          state={holdSys ? 'on' : 'off'}
-          onClick={handleHoldSystem}
         />
         <Box sx={spacerSx} />
         <RetroButton

@@ -99,6 +99,67 @@ function LedDot({
 }
 
 // ---------------------------------------------------------------------------
+// ProgressTimestamp — renders the call progress time, subscribes to rAF
+// ---------------------------------------------------------------------------
+function ProgressTimestamp({
+  call,
+  time12hFormat,
+}: {
+  call: Call | null;
+  time12hFormat: boolean;
+}) {
+  const callTime = useAudioTime();
+
+  if (!call) return null;
+
+  const d = new Date(call.dateTime);
+  d.setSeconds(d.getSeconds() + callTime);
+
+  const timeFormat: Intl.DateTimeFormatOptions = time12hFormat
+    ? { hour: 'numeric', minute: '2-digit', hour12: true }
+    : { hour: '2-digit', minute: '2-digit', hour12: false };
+
+  const timeStr = d.toLocaleTimeString([], timeFormat);
+
+  // Show date if call is older than 24 hours
+  const showDate = Date.now() - d.getTime() >= 86400000;
+  const dateStr = showDate
+    ? `${String(new Date(call.dateTime).getMonth() + 1).padStart(2, '0')}/${String(new Date(call.dateTime).getDate()).padStart(2, '0')} `
+    : '';
+
+  return (
+    <>
+      {dateStr && <span>{dateStr}</span>}
+      <span>{timeStr}</span>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FrequencyDisplay — renders frequency value, subscribes to rAF
+// ---------------------------------------------------------------------------
+function FrequencyDisplay({ call }: { call: Call | null }) {
+  const callTime = useAudioTime();
+  const { frequency } = getFrequencyInfo(call, callTime);
+
+  return <span>F: {frequency || '0'}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// ErrorSpikeDisplay — renders error/spike counts, subscribes to rAF
+// ---------------------------------------------------------------------------
+function ErrorSpikeDisplay({ call }: { call: Call | null }) {
+  const callTime = useAudioTime();
+  const { error, spike } = getFrequencyInfo(call, callTime);
+
+  return (
+    <span>
+      E: {error || '0'} S: {spike || '0'}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main ScannerDisplay
 // ---------------------------------------------------------------------------
 
@@ -113,7 +174,6 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
   const linked = useScannerStore((s) => s.linked);
   const listeners = useScannerStore((s) => s.listeners);
   const callQueue = useScannerStore((s) => s.callQueue);
-  const callTime = useAudioTime();
   const clock = useClock();
   const { isDimmed } = useDimmer(config.dimmerDelay);
 
@@ -145,26 +205,6 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
 
   const callDuration = call?.audioDuration || 0;
 
-  const { frequency: callFrequency, error: callError, spike: callSpike } =
-    getFrequencyInfo(call, callTime);
-
-  // Compute progress timestamp
-  const callProgress = useMemo(() => {
-    if (!call) return null;
-    const d = new Date(call.dateTime);
-    d.setSeconds(d.getSeconds() + callTime);
-    return d;
-  }, [call, callTime]);
-
-  // Show date if the call is more than 24 hours old
-  const callDate = useMemo(() => {
-    if (!call || !callProgress) return null;
-    if (Date.now() - callProgress.getTime() >= 86400000) {
-      return call.dateTime;
-    }
-    return null;
-  }, [call, callProgress]);
-
   // Avoid/patch flags
   const activeCall = call || callPrevious;
   const { isAvoided, isAvoidedTimer, isPatched } = useScannerStore.getState();
@@ -187,12 +227,6 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
   const formatTime = (date: Date | null) => {
     if (!date) return '';
     return date.toLocaleTimeString([], timeFormat);
-  };
-
-  const formatDate = (date: Date | null) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
   };
 
   // Shared row style
@@ -281,8 +315,7 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
           <span>{callDuration.toFixed(1)}s</span>
           {' '}
           {'\u2014 '}
-          {callDate && <span>{formatDate(callDate)} </span>}
-          <span>{formatTime(callProgress)}</span>
+          <ProgressTimestamp call={call} time12hFormat={config.time12hFormat} />
         </Box>
       </Box>
 
@@ -300,7 +333,7 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
 
       {/* Frequency / TGID row */}
       <Box sx={rowSx}>
-        <Box><span>F: {callFrequency || '0'}</span></Box>
+        <Box><FrequencyDisplay call={call} /></Box>
         <Box><span>TGID: {callTalkgroupId || '0'}</span></Box>
       </Box>
 
@@ -314,15 +347,12 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
         }}
       >
         <Box>
-          <span>
-            E: {callError || '0'} S: {callSpike || '0'}
-          </span>
+          <ErrorSpikeDisplay call={call} />
         </Box>
         <Box>
           {call && (
             <UnitTimeline
               call={call}
-              callTime={callTime}
               callDuration={callDuration}
             />
           )}

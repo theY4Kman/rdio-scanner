@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Box } from '@mui/material';
 import { useScannerStore } from '../../stores/scanner';
+import { useAudioTime } from '../../hooks/useAudioTime';
 import { formatDuration } from '../../utils/format';
 import type { Call, CallSource } from '../../types/scanner';
 
@@ -75,11 +76,11 @@ function getSourceLabel(
 
 interface UnitTimelineProps {
   call: Call;
-  callTime: number;
   callDuration: number;
 }
 
-export function UnitTimeline({ call, callTime, callDuration }: UnitTimelineProps) {
+export function UnitTimeline({ call, callDuration }: UnitTimelineProps) {
+  const callTime = useAudioTime();
   const unitsIndex = useScannerStore((s) => s.unitsIndex);
   const seek = useScannerStore.getState().seek;
 

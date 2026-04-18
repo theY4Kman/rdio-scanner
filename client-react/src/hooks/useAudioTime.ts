@@ -1,14 +1,17 @@
+import { useSyncExternalStore } from 'react';
 import { useEffect, useState } from 'react';
-import { useScannerStore } from '../stores/scanner';
+import { subscribeAudioTime, getAudioTimeSnapshot } from '../stores/scanner';
 
 /**
- * Hook that returns the current audio playback time from the scanner store.
- * Subscribes to the store's callTime state which updates at ~100ms intervals
- * during playback.
+ * Hook that returns the current audio playback time.
+ *
+ * Uses useSyncExternalStore to subscribe directly to the module-level
+ * rAF time source in the scanner store — bypasses Zustand entirely
+ * for high-frequency updates, enabling smooth 60fps rendering in
+ * only the components that call this hook.
  */
 export function useAudioTime(): number {
-  const callTime = useScannerStore((state) => state.callTime);
-  return callTime;
+  return useSyncExternalStore(subscribeAudioTime, getAudioTimeSnapshot);
 }
 
 /**

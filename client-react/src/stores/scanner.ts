@@ -75,9 +75,55 @@ let audioContext: AudioContext | undefined;
 let audioSource: AudioBufferSourceNode | undefined;
 let audioBuffer: AudioBuffer | undefined;
 let audioSourceStartTime = NaN;
-let audioTimeInterval: ReturnType<typeof setInterval> | undefined;
 let beepContext: AudioContext | undefined;
 let audioBootstrapped = false;
+
+// ---------------------------------------------------------------------------
+// rAF-based audio time source (bypasses Zustand for high-frequency updates)
+// ---------------------------------------------------------------------------
+
+let currentAudioTime = 0;
+let audioTimeSubscribers = new Set<() => void>();
+let audioTimeRafId: number | undefined;
+
+const AUDIO_TIME_NOTIFY_INTERVAL_MS = 66; // ~15fps — CSS transitions smooth the gaps
+let lastNotifyTime = 0;
+
+function startAudioTimeLoop(): void {
+    stopAudioTimeLoop();
+    lastNotifyTime = 0;
+    const tick = (now: number) => {
+        if (audioContext && !isNaN(audioSourceStartTime)) {
+            currentAudioTime = audioContext.currentTime - audioSourceStartTime;
+        }
+        // Throttle React re-renders — update currentAudioTime every frame
+        // (so reads are always fresh) but only notify subscribers periodically
+        if (now - lastNotifyTime >= AUDIO_TIME_NOTIFY_INTERVAL_MS) {
+            lastNotifyTime = now;
+            audioTimeSubscribers.forEach((cb) => cb());
+        }
+        audioTimeRafId = requestAnimationFrame(tick);
+    };
+    audioTimeRafId = requestAnimationFrame(tick);
+}
+
+function stopAudioTimeLoop(): void {
+    if (audioTimeRafId !== undefined) {
+        cancelAnimationFrame(audioTimeRafId);
+        audioTimeRafId = undefined;
+    }
+}
+
+/** Subscribe to audio time updates (for useSyncExternalStore) */
+export function subscribeAudioTime(callback: () => void): () => void {
+    audioTimeSubscribers.add(callback);
+    return () => { audioTimeSubscribers.delete(callback); };
+}
+
+/** Get current audio time snapshot (for useSyncExternalStore) */
+export function getAudioTimeSnapshot(): number {
+    return currentAudioTime;
+}
 
 // ---------------------------------------------------------------------------
 // Module-level connection & timer state
@@ -226,7 +272,10 @@ function wsSend(command: string, payload?: unknown, flags?: string): void {
 }
 
 function openWebSocket(): void {
-    const websocketUrl = window.location.href.replace(/^http/, 'ws');
+    // In dev mode (Vite), connect WS to /ws so the Vite proxy can forward it.
+    // In production, the Go server handles WS on the root path.
+    const baseUrl = window.location.origin.replace(/^http/, 'ws');
+    const websocketUrl = import.meta.env.DEV ? `${baseUrl}/ws` : window.location.href.replace(/^http/, 'ws');
 
     ws = new WebSocket(websocketUrl);
 
@@ -345,10 +394,8 @@ function bootstrapAudio(): void {
 // ---------------------------------------------------------------------------
 
 function stopAudio(options?: { emit?: boolean }): void {
-    if (audioTimeInterval !== undefined) {
-        clearInterval(audioTimeInterval);
-        audioTimeInterval = undefined;
-    }
+    stopAudioTimeLoop();
+    currentAudioTime = 0;
 
     if (audioSource) {
         audioSource.onended = null;
@@ -1378,9 +1425,12 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         const newPaused = status !== undefined ? status : !state.paused;
 
         if (newPaused) {
+            stopAudioTimeLoop();
+            // Write current time to Zustand for pause display
             set({
                 paused: true,
                 pausedAt: new Date(),
+                callTime: currentAudioTime,
             });
 
             void audioContext?.suspend();
@@ -1391,6 +1441,7 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             });
 
             void audioContext?.resume();
+            startAudioTimeLoop();
 
             get().play();
         }
@@ -1447,39 +1498,19 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             audioSource.buffer = buffer;
             audioSource.connect(audioContext.destination);
             audioSource.onended = () => {
+                stopAudioTimeLoop();
+                currentAudioTime = buffer.duration;
                 set({ callTime: buffer.duration });
                 get().skip({ delay: true });
             };
             audioSource.start();
+            audioSourceStartTime = audioContext.currentTime;
 
             set({ callTime: 0 });
+            currentAudioTime = 0;
 
-            // Start time update interval (replaces RxJS interval(100))
-            if (audioTimeInterval !== undefined) {
-                clearInterval(audioTimeInterval);
-            }
-
-            // Update time at ~4Hz (250ms) to avoid excessive re-renders.
-            // The Angular version used 100ms with RxJS (no React re-render overhead).
-            audioTimeInterval = setInterval(() => {
-                if (!get().call) {
-                    if (audioTimeInterval !== undefined) {
-                        clearInterval(audioTimeInterval);
-                        audioTimeInterval = undefined;
-                    }
-                    return;
-                }
-
-                if (audioContext && !isNaN(audioContext.currentTime)) {
-                    if (isNaN(audioSourceStartTime)) {
-                        audioSourceStartTime = audioContext.currentTime;
-                    }
-
-                    if (!get().paused) {
-                        set({ callTime: audioContext.currentTime - audioSourceStartTime });
-                    }
-                }
-            }, 250);
+            // Start rAF-based time updates (bypasses Zustand for smooth 60fps)
+            startAudioTimeLoop();
         }, () => {
             // Decode error -- skip
             get().skip({ delay: false });
@@ -1540,7 +1571,10 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         audioSource.start(0, seconds);
 
         audioSourceStartTime = audioContext.currentTime - seconds;
+        currentAudioTime = seconds;
         set({ callTime: seconds });
+        // Notify subscribers immediately so UI updates without waiting for next rAF
+        audioTimeSubscribers.forEach((cb) => cb());
 
         return true;
     },

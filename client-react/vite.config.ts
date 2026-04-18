@@ -39,6 +39,8 @@ export default defineConfig({
       '/ws': {
         target: apiTarget.replace(/^http/, 'ws'),
         ws: true,
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

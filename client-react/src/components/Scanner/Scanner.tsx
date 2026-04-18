@@ -10,6 +10,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useScannerStore } from '../../stores/scanner';
 import { BeepStyle, LivefeedMode } from '../../types/scanner';
+import { installExtensionApi } from '../../services/extension';
 import { MainDisplay } from './MainDisplay';
 import SearchPanel from './SearchPanel';
 import SelectPanel from './SelectPanel';
@@ -28,7 +29,9 @@ export default function Scanner() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     useScannerStore.getState().initialize();
+    const teardownExt = installExtensionApi();
     return () => {
+      teardownExt();
       useScannerStore.getState().destroy();
     };
   }, []);
