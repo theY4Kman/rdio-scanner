@@ -1,9 +1,12 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
+// NOTE: The parent LCD panel (ScannerDisplay) clips overflow, so we render
+// all MAX_HISTORY rows and let the panel hide any that extend past its edge.
 import { Box } from '@mui/material';
 import { useScannerStore } from '../../stores/scanner';
 import { formatDuration } from '../../utils/format';
 import { LED_COLORS, LED_COLOR_DEFAULT } from '../../utils/led-colors';
-import type { Call } from '../../types/scanner';
+import type { Call, CallSource as CallSourceType } from '../../types/scanner';
+import UnitLabel from '../UnitLabel';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,39 +23,29 @@ function calcNumUniqueSources(call: Call): number {
   return 0;
 }
 
-function getSourceLabel(source: { src?: number; label?: string }): string {
-  if (source.label) return source.label;
-  if (typeof source.src === 'number') return `${source.src}`;
-  return '?';
-}
+
 
 // ---------------------------------------------------------------------------
 // CallHistory component
 // ---------------------------------------------------------------------------
 
-export function CallHistory() {
+const MAX_HISTORY = 30;
+
+interface CallHistoryProps {
+  onEditUnit?: (call: Call, source: CallSourceType) => void;
+}
+
+export function CallHistory({ onEditUnit }: CallHistoryProps) {
   const config = useScannerStore((s) => s.config);
   const call = useScannerStore((s) => s.call);
-  const callPrevious = useScannerStore((s) => s.callPrevious);
-  // Maintain a history of the last 30 played calls
-  const historyRef = useRef<(Call | undefined)[]>(new Array(30).fill(undefined));
+  const storeHistory = useScannerStore((s) => s.callHistory);
 
-  // Update history when call or callPrevious changes
+  // Pad with undefined to fill MAX_HISTORY rows (empty rows render as blanks)
   const history = useMemo(() => {
-    const h = historyRef.current;
-
-    const addToHistory = (c: Call) => {
-      if (!h.find((item) => item?.id === c.id)) {
-        h.pop();
-        h.unshift(c);
-      }
-    };
-
-    if (call) addToHistory(call);
-    if (callPrevious && callPrevious.id !== call?.id) addToHistory(callPrevious);
-
-    return [...h];
-  }, [call, callPrevious]);
+    const padded: (Call | undefined)[] = [...storeHistory];
+    while (padded.length < MAX_HISTORY) padded.push(undefined);
+    return padded;
+  }, [storeHistory]);
 
   const loadAndPlay = useScannerStore.getState().loadAndPlay;
 
@@ -190,21 +183,11 @@ export function CallHistory() {
                     {prevCall.sources?.map((source, srcIdx) => (
                       <span key={srcIdx}>
                         {srcIdx > 0 && ', '}
-                        <span
-                          style={{
-                            color:
-                              source.label != null
-                                ? 'rgb(0, 163, 84)'
-                                : 'rgb(204, 122, 0)',
-                          }}
-                          title={
-                            typeof source.src === 'number'
-                              ? `${source.src}`
-                              : undefined
-                          }
-                        >
-                          {getSourceLabel(source)}
-                        </span>
+                        <UnitLabel
+                          call={prevCall}
+                          source={source}
+                          onEdit={onEditUnit}
+                        />
                       </span>
                     ))}
                   </span>

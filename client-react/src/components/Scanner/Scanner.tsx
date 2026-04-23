@@ -8,10 +8,12 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useScannerStore } from '../../stores/scanner';
+import { useScannerStore, getAudioTimeSnapshot } from '../../stores/scanner';
 import { BeepStyle, LivefeedMode } from '../../types/scanner';
+import type { Call, CallSource as CallSourceType } from '../../types/scanner';
 import { installExtensionApi } from '../../services/extension';
 import { MainDisplay } from './MainDisplay';
+import Labeler, { type LabelerState } from '../Labeler/Labeler';
 import SearchPanel from './SearchPanel';
 import SelectPanel from './SelectPanel';
 
@@ -23,6 +25,23 @@ export default function Scanner() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Replay-back logic (port of Angular's replayOffset + replayTimer).
+  // First press = seek to beginning of current call.
+  // Quick successive presses within 1s = walk back through call history.
+  const replayOffsetRef = useRef(0);
+  const replayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Labeler (unit label editing) state
+  const [labelerState, setLabelerState] = useState<LabelerState>({ call: undefined, source: undefined });
+
+  const openLabeler = useCallback((call: Call, source: CallSourceType) => {
+    setLabelerState({ call, source });
+  }, []);
+
+  const closeLabeler = useCallback(() => {
+    setLabelerState({ call: undefined, source: undefined });
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Lifecycle: initialize and destroy the scanner store
@@ -110,60 +129,134 @@ export default function Scanner() {
     [authRequired, panelsOpen],
   );
 
-  // N or Right: Skip next
+  // N or Right: Skip next (with delay)
   useHotkeys(
     'n, right',
     () => {
       if (authRequired) return;
       const s = store();
       s.beep(BeepStyle.Activate);
-      s.skip();
+      s.skip({ delay: true });
     },
     { enabled: !panelsOpen },
     [authRequired, panelsOpen],
   );
 
+  // Replay handler (shared by keyboard and button)
+  const handleReplay = useCallback(() => {
+    if (authRequired) return;
+    const s = store();
+    if (!s.paused && (s.call || s.callPrevious)) {
+      s.beep(BeepStyle.Activate);
+
+      // If there's an existing timer, bump the offset (quick successive press)
+      if (replayTimerRef.current !== null) {
+        clearTimeout(replayTimerRef.current);
+        replayOffsetRef.current = Math.min(
+          s.callHistory.length,
+          replayOffsetRef.current + 1,
+        );
+      }
+
+      // Reset the timer — offset resets after 1s of inactivity
+      replayTimerRef.current = setTimeout(() => {
+        replayTimerRef.current = null;
+        replayOffsetRef.current = 0;
+      }, 1000);
+
+      const offset = replayOffsetRef.current;
+
+      if (s.call && offset === 0) {
+        // First press while playing: seek to beginning
+        s.replay();
+      } else if (offset > 0 && offset <= s.callHistory.length) {
+        // Walk back through history (skipHistory prevents array rotation)
+        const historyCall = s.callHistory[offset - 1];
+        if (historyCall) {
+          s.play(historyCall, { skipHistory: true });
+        } else {
+          s.replay();
+        }
+      } else {
+        s.replay();
+      }
+    } else {
+      s.beep(BeepStyle.Denied);
+    }
+  }, [authRequired, store]);
+
   // P or Left: Replay last
   useHotkeys(
     'p, left',
+    () => handleReplay(),
+    { enabled: !panelsOpen },
+    [handleReplay, panelsOpen],
+  );
+
+  // Shift+N or Shift+Right: Skip to next source (unit) within the call
+  useHotkeys(
+    'shift+n, shift+right',
     () => {
       if (authRequired) return;
       const s = store();
-      if (!s.paused && (s.call || s.callPrevious)) {
+      const call = s.call;
+      if (!call?.sources?.length) {
+        // No sources — fall back to skip entire call (no delay)
+        s.beep(s.call ? BeepStyle.Activate : BeepStyle.Denied);
+        if (s.call) s.skip();
+        return;
+      }
+      const time = getAudioTimeSnapshot();
+      // Find current source index
+      let idx = 0;
+      for (let i = 0; i < call.sources.length; i++) {
+        if ((call.sources[i]!.pos || 0) <= time) idx = i;
+      }
+      const next = call.sources[idx + 1];
+      if (next && next.pos != null) {
         s.beep(BeepStyle.Activate);
-        s.replay();
+        s.seek(next.pos);
       } else {
-        s.beep(BeepStyle.Denied);
+        // At last source — skip to next call
+        s.beep(BeepStyle.Activate);
+        s.skip();
       }
     },
     { enabled: !panelsOpen },
     [authRequired, panelsOpen],
   );
 
-  // Shift+N or Shift+Right: Skip to next unit
-  useHotkeys(
-    'shift+n, shift+right',
-    () => {
-      if (authRequired) return;
-      const s = store();
-      s.beep(BeepStyle.Activate);
-      s.skip();
-    },
-    { enabled: !panelsOpen },
-    [authRequired, panelsOpen],
-  );
-
-  // Shift+P or Shift+Left: Replay previous unit
+  // Shift+P or Shift+Left: Seek to previous source (unit) within the call
   useHotkeys(
     'shift+p, shift+left',
     () => {
       if (authRequired) return;
       const s = store();
-      if (!s.paused && (s.call || s.callPrevious)) {
-        s.beep(BeepStyle.Activate);
-        s.replay();
-      } else {
+      const call = s.call;
+      if (!call?.sources?.length) {
         s.beep(BeepStyle.Denied);
+        return;
+      }
+      const time = getAudioTimeSnapshot();
+      // Find current source index
+      let idx = 0;
+      for (let i = 0; i < call.sources.length; i++) {
+        if ((call.sources[i]!.pos || 0) <= time) idx = i;
+      }
+      // If we're more than 1s into the current source, seek to its start;
+      // otherwise go to the previous source
+      const currentPos = call.sources[idx]!.pos || 0;
+      if (time - currentPos > 1) {
+        s.beep(BeepStyle.Activate);
+        s.seek(currentPos);
+      } else if (idx > 0) {
+        const prev = call.sources[idx - 1]!;
+        s.beep(BeepStyle.Activate);
+        s.seek(prev.pos || 0);
+      } else {
+        // At first source, seek to beginning
+        s.beep(BeepStyle.Activate);
+        s.seek(0);
       }
     },
     { enabled: !panelsOpen },
@@ -340,7 +433,7 @@ export default function Scanner() {
           </Toolbar>
           <Box sx={{ flex: 1, overflow: 'auto' }}>
             <Box sx={{ maxWidth: 1200, mx: 'auto', width: '100%' }}>
-              <SearchPanel />
+              <SearchPanel onEditUnit={openLabeler} />
             </Box>
           </Box>
         </Box>
@@ -406,9 +499,21 @@ export default function Scanner() {
         <MainDisplay
           onOpenSearch={handleOpenSearch}
           onOpenSelect={handleOpenSelect}
+          onReplay={handleReplay}
           onToggleFullscreen={toggleFullscreen}
+          onEditUnit={openLabeler}
         />
       </Box>
+
+      {/* Unit label editor overlay */}
+      <Labeler
+        state={labelerState}
+        onCancel={closeLabeler}
+        onSearchUnit={(_systemId, _unitId) => {
+          closeLabeler();
+          // TODO: open search panel pre-filtered by unit
+        }}
+      />
     </Box>
   );
 }

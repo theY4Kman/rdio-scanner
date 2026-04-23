@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useScannerStore } from '../../stores/scanner';
 import { LivefeedMode } from '../../types/scanner';
-import type { Call, PlaybackList } from '../../types/scanner';
+import type { Call, CallSource as CallSourceType, PlaybackList } from '../../types/scanner';
 import SearchForm, {
   buildSearchOptions,
   INITIAL_FORM_VALUES,
@@ -21,7 +21,11 @@ const FETCH_LIMIT = 200;
 // Component
 // ---------------------------------------------------------------------------
 
-export default function SearchPanel() {
+interface SearchPanelProps {
+  onEditUnit?: (call: Call, source: CallSourceType) => void;
+}
+
+export default function SearchPanel({ onEditUnit }: SearchPanelProps) {
   // -------------------------------------------------------------------------
   // Store subscriptions
   // -------------------------------------------------------------------------
@@ -45,6 +49,17 @@ export default function SearchPanel() {
   const [pageIndex, setPageIndex] = useState(0);
   const [resultsPending, setResultsPending] = useState(false);
   const [downloadMode, setDownloadMode] = useState(false);
+
+  // Play-All default: session-only. Default depends on livefeed/pause state
+  // at the moment the search panel is first rendered:
+  //   - livefeed off + not paused → default ON (user's natural flow is to
+  //     listen through the whole list)
+  //   - otherwise → default OFF (user probably wants to inspect single calls
+  //     without disrupting livefeed).
+  const [playAll, setPlayAll] = useState<boolean>(() => {
+    return livefeedMode === LivefeedMode.Offline && !paused;
+  });
+
   const [results, setResults] = useState<Array<Call | null>>(
     () => new Array(PAGE_SIZE).fill(null),
   );
@@ -226,8 +241,11 @@ export default function SearchPanel() {
         pageIndex={pageIndex}
         pageSize={PAGE_SIZE}
         downloadMode={downloadMode}
+        playAll={playAll}
         onDownloadModeChange={setDownloadMode}
+        onPlayAllChange={setPlayAll}
         onPageChange={handlePageChange}
+        onEditUnit={onEditUnit}
       />
 
       <SearchForm

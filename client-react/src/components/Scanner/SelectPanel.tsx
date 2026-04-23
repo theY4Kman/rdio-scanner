@@ -205,9 +205,7 @@ function CategoryButton({ category, onToggle }: CategoryButtonProps) {
       onClick={() => onToggle(category)}
       sx={{
         ...buttonBaseSx,
-        width: 'auto',
-        flex: 1,
-        minWidth: 80,
+        width: { xs: 'calc(25% - 4px)', sm: 'calc(20% - 4px)', lg: 'calc(10% - 4px)' },
         ...ledDotSx(state, false),
       } as SxProps<Theme>}
     >
@@ -305,12 +303,22 @@ export default function SelectPanel() {
   const systems = config.systems;
   // const tagsToggle = config.tagsToggle; // reserved for future use
 
-  // Unit selection state
-  const [selectedUnitKeys, setSelectedUnitKeys] = useState<string[]>([]);
   const [unitFilterText, setUnitFilterText] = useState('');
 
   // Build available + filtered units
   const availableUnits = useMemo(() => buildAvailableUnits(systems), [systems]);
+
+  // Derive selected unit keys from the store's livefeedUnitsMap (persisted
+  // in localStorage).  Any unit ID present + truthy in the map is selected.
+  const selectedUnitKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const su of availableUnits) {
+      if (livefeedUnitsMap[su[1].id]) {
+        keys.push(makeUnitKey(su));
+      }
+    }
+    return keys;
+  }, [availableUnits, livefeedUnitsMap]);
 
   const filteredUnits = useMemo(() => {
     const filter = unitFilterText.toLowerCase().trim();
@@ -362,35 +370,70 @@ export default function SelectPanel() {
     [beep, toggleCategory],
   );
 
+  // Build a lookup from composite key -> unit ID
+  const unitKeyToId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const su of availableUnits) {
+      map.set(makeUnitKey(su), su[1].id);
+    }
+    return map;
+  }, [availableUnits]);
+
   const handleUnitSelectionChange = useCallback(
     (event: SelectChangeEvent<string[]>) => {
-      const val = event.target.value;
-      setSelectedUnitKeys(typeof val === 'string' ? val.split(',') : val);
+      const val = typeof event.target.value === 'string'
+        ? event.target.value.split(',')
+        : event.target.value;
+      const currentKeys = new Set(selectedUnitKeys);
+      // Toggle units that changed
+      for (const key of val) {
+        if (!currentKeys.has(key)) {
+          const uid = unitKeyToId.get(key);
+          if (uid != null) avoidUnit(uid);  // add
+        }
+      }
+      for (const key of currentKeys) {
+        if (!val.includes(key)) {
+          const uid = unitKeyToId.get(key);
+          if (uid != null) avoidUnit(uid);  // remove
+        }
+      }
     },
-    [],
+    [selectedUnitKeys, unitKeyToId, avoidUnit],
   );
 
   const handleSelectAllUnits = useCallback(() => {
-    const filteredKeys = new Set(filteredUnits.map(makeUnitKey));
-    setSelectedUnitKeys((prev) => {
-      const merged = new Set([...prev, ...filteredKeys]);
-      return Array.from(merged);
-    });
-  }, [filteredUnits]);
+    const currentKeys = new Set(selectedUnitKeys);
+    for (const su of filteredUnits) {
+      const key = makeUnitKey(su);
+      if (!currentKeys.has(key)) {
+        avoidUnit(su[1].id);
+      }
+    }
+  }, [filteredUnits, selectedUnitKeys, avoidUnit]);
 
   const handleDeselectAllUnits = useCallback(() => {
     const filteredKeys = new Set(filteredUnits.map(makeUnitKey));
-    setSelectedUnitKeys((prev) => prev.filter((k) => !filteredKeys.has(k)));
-  }, [filteredUnits]);
+    for (const key of selectedUnitKeys) {
+      if (filteredKeys.has(key)) {
+        const uid = unitKeyToId.get(key);
+        if (uid != null) avoidUnit(uid);
+      }
+    }
+  }, [filteredUnits, selectedUnitKeys, unitKeyToId, avoidUnit]);
 
   const handleClearAllUnits = useCallback(() => {
-    setSelectedUnitKeys([]);
+    for (const key of selectedUnitKeys) {
+      const uid = unitKeyToId.get(key);
+      if (uid != null) avoidUnit(uid);
+    }
     setUnitFilterText('');
-  }, []);
+  }, [selectedUnitKeys, unitKeyToId, avoidUnit]);
 
   const handleRemoveUnit = useCallback((key: string) => {
-    setSelectedUnitKeys((prev) => prev.filter((k) => k !== key));
-  }, []);
+    const uid = unitKeyToId.get(key);
+    if (uid != null) avoidUnit(uid);
+  }, [unitKeyToId, avoidUnit]);
 
   const handleToggleUnit = useCallback(
     (unitId: number) => {
@@ -422,7 +465,7 @@ export default function SelectPanel() {
               display: 'flex',
               flexDirection: 'row',
               flexWrap: 'wrap',
-              justifyContent: 'space-evenly',
+              justifyContent: 'flex-start',
             }}
           >
             {categories.map((cat) => (
@@ -432,6 +475,8 @@ export default function SelectPanel() {
                 onToggle={handleToggleCategory}
               />
             ))}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', mt: '4px' }}>
             <MiniButton
               label="OFF"
               variant="off"
@@ -459,7 +504,7 @@ export default function SelectPanel() {
                 display: 'flex',
                 flexDirection: 'row',
                 flexWrap: 'wrap',
-                justifyContent: 'space-evenly',
+                justifyContent: 'flex-start',
               }}
             >
               {system.talkgroups.map((tg) => (
@@ -471,21 +516,21 @@ export default function SelectPanel() {
                   onAvoid={handleAvoid}
                 />
               ))}
-              {system.talkgroups.length > 1 && (
-                <>
-                  <MiniButton
-                    label="OFF"
-                    variant="off"
-                    onClick={() => handleAvoid({ system, status: false })}
-                  />
-                  <MiniButton
-                    label="ON"
-                    variant="on"
-                    onClick={() => handleAvoid({ system, status: true })}
-                  />
-                </>
-              )}
             </Box>
+            {system.talkgroups.length > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', mt: '4px' }}>
+                <MiniButton
+                  label="OFF"
+                  variant="off"
+                  onClick={() => handleAvoid({ system, status: false })}
+                />
+                <MiniButton
+                  label="ON"
+                  variant="on"
+                  onClick={() => handleAvoid({ system, status: true })}
+                />
+              </Box>
+            )}
           </Box>
         );
       })}

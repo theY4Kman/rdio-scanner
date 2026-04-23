@@ -1,10 +1,9 @@
-import { useCallback } from 'react';
 import { Box } from '@mui/material';
 import { QueueTicker } from './QueueTicker';
 import { ScannerDisplay, LedDot } from './ScannerDisplay';
 import { ControlButtons } from './ControlButtons';
 import { useScannerStore } from '../../stores/scanner';
-import { registerTranscriptSlot } from '../../services/extension';
+import type { Call, CallSource as CallSourceType } from '../../types/scanner';
 
 // ---------------------------------------------------------------------------
 // MainDisplay -- orchestrates the scanner display, queue ticker, and controls
@@ -13,22 +12,20 @@ import { registerTranscriptSlot } from '../../services/extension';
 interface MainDisplayProps {
   onOpenSearch: () => void;
   onOpenSelect: () => void;
+  onReplay: () => void;
   onToggleFullscreen: () => void;
+  onEditUnit?: (call: Call, source: CallSourceType) => void;
 }
 
 export function MainDisplay({
   onOpenSearch,
   onOpenSelect,
+  onReplay,
   onToggleFullscreen,
+  onEditUnit,
 }: MainDisplayProps) {
   const call = useScannerStore((s) => s.call);
   const paused = useScannerStore((s) => s.paused);
-
-  // Stable callback ref — registers the transcript slot element with the
-  // extension API so browser extensions can inject content here.
-  const transcriptSlotRef = useCallback((el: HTMLDivElement | null) => {
-    registerTranscriptSlot(el);
-  }, []);
 
   return (
     <Box
@@ -56,13 +53,10 @@ export function MainDisplay({
       </Box>
 
       {/* LCD display area */}
-      <ScannerDisplay onDoubleClick={onToggleFullscreen} />
-
-      {/* Extension slot: transcript area (stable anchor for browser extensions) */}
-      <Box id="rdio-ext-transcript-slot" ref={transcriptSlotRef} />
+      <ScannerDisplay onDoubleClick={onToggleFullscreen} onEditUnit={onEditUnit} />
 
       {/* Control buttons */}
-      <ControlButtons onOpenSearch={onOpenSearch} onOpenSelect={onOpenSelect} />
+      <ControlButtons onOpenSearch={onOpenSearch} onOpenSelect={onOpenSelect} onReplay={onReplay} />
     </Box>
   );
 }

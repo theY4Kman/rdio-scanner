@@ -20,8 +20,8 @@ import { formatSrcId } from './CallSource';
 // ---------------------------------------------------------------------------
 
 export interface UnitLabelHistoryEntry {
-  createdAt: Date;
-  label?: string;
+  createdAt: Date | string;
+  label?: string | null;
 }
 
 export interface UnitLabelHistoryDialogProps {
@@ -39,10 +39,11 @@ export interface UnitLabelHistoryDialogProps {
 export default function UnitLabelHistoryDialog({
   open,
   onClose,
-  systemId,
+  systemId: _systemId,
   unitId,
   history = [],
 }: UnitLabelHistoryDialogProps) {
+  void _systemId; // reserved for future use
   const formattedUnitId = formatSrcId(unitId);
 
   return (
@@ -88,14 +89,7 @@ export default function UnitLabelHistoryDialog({
             variant="body2"
             sx={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', py: 3 }}
           >
-            {/* Placeholder message -- admin API not yet integrated */}
             No label history found for this unit.
-            {systemId != null && (
-              <>
-                <br />
-                (Admin API integration coming in Phase 7)
-              </>
-            )}
           </Typography>
         ) : (
           <List disablePadding>

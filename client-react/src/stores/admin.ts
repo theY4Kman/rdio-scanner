@@ -8,6 +8,14 @@
 import { create } from 'zustand';
 import type { AdminConfig, LogsQuery, LogsQueryOptions } from '../types/admin';
 
+// Re-export for consumers
+export interface UnitLabelHistoryEntry {
+  id: number;
+  createdAt: string;
+  unitId: number;
+  label: string | null;
+}
+
 const SESSION_STORAGE_KEY = 'rdio-scanner-admin-token';
 
 function getToken(): string {
@@ -48,6 +56,9 @@ export interface AdminState {
   getConfig: () => Promise<AdminConfig>;
   saveConfig: (config: AdminConfig) => Promise<AdminConfig>;
   patchConfig: (config: AdminConfig) => Promise<AdminConfig>;
+  setUnitLabel: (systemId: number, unitId: number, label: string) => Promise<boolean>;
+  deleteUnitLabel: (systemId: number, unitId: number) => Promise<boolean>;
+  getUnitLabelHistory: (systemId: number, unitId: number) => Promise<UnitLabelHistoryEntry[]>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   getLogs: (options: LogsQueryOptions) => Promise<LogsQuery | undefined>;
   setConfig: (config: AdminConfig | null) => void;
@@ -233,6 +244,46 @@ export const useAdminStore = create<AdminState>((set, _get) => {
     saveConfig: (config: AdminConfig) => uploadConfig('PUT', config),
 
     patchConfig: (config: AdminConfig) => uploadConfig('PATCH', config),
+
+    setUnitLabel: async (systemId: number, unitId: number, label: string) => {
+      try {
+        await uploadConfig('PATCH', {
+          systems: [{ id: systemId, units: [{ id: unitId, label }] }],
+        } as unknown as AdminConfig);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    deleteUnitLabel: async (systemId: number, unitId: number) => {
+      try {
+        await uploadConfig('PATCH', {
+          systems: [{ id: systemId, units: [{ id: unitId, label: undefined }] }],
+        } as unknown as AdminConfig);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    getUnitLabelHistory: async (systemId: number, unitId: number): Promise<UnitLabelHistoryEntry[]> => {
+      try {
+        const res = await fetch(apiUrl('unit-label-history'), {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ systemId, unitId }),
+        });
+        if (res.status === 401) {
+          handleUnauth();
+          return [];
+        }
+        if (!res.ok) return [];
+        return (await res.json()) as UnitLabelHistoryEntry[];
+      } catch {
+        return [];
+      }
+    },
 
     changePassword: async (currentPassword: string, newPassword: string) => {
       const res = await fetch(apiUrl('password'), {
