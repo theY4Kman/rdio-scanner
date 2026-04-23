@@ -36,6 +36,7 @@ import type {
     PlaybackList,
     QueuePersistState,
     SearchOptions,
+    SearchQueueState,
     System,
     UnitsIndex,
 } from '../types/scanner';
@@ -146,8 +147,8 @@ let queueRestoreOpportunityConsumed = false;
 let instanceId = 'default';
 let pendingPassword = '';
 
-// AudioManager is only used for beep() (oscillator logic)
-const audioManager = new AudioManager();
+// AudioManager instance kept for potential future use (e.g. direct playback)
+const _audioManager = new AudioManager(); void _audioManager;
 
 // ---------------------------------------------------------------------------
 // Store interface
@@ -160,6 +161,12 @@ export interface ScannerState {
     // Config
     config: Config;
     unitsIndex: UnitsIndex;
+
+    // Unit-label save-in-flight state. A unit key here means an admin save
+    // (or delete, when label === null) is pending server confirmation. The
+    // UI renders these entries in teal to signal "in progress". Entries are
+    // cleared when a config emission from the server confirms the change.
+    pendingUnitLabels: { [systemId: number]: { [unitId: number]: { label: string | null; ts: number } } };
 
     // Auth
     authRequired: boolean;
@@ -175,7 +182,14 @@ export interface ScannerState {
     // Playback
     call: Call | null;
     callPrevious: Call | null;
+    callHistory: Call[];  // last N played calls for replay navigation
     callQueue: Call[];
+
+    // Search queue -- orthogonal to livefeed. When active, playing calls come
+    // from user-selected search results. Livefeed continues running in the
+    // background; arriving calls are buffered into pendingLivefeedCalls until
+    // the search queue ends.
+    searchQueue: SearchQueueState;
     callTime: number;
     paused: boolean;
     pausedAt: Date | null;
@@ -214,7 +228,7 @@ export interface ScannerActions {
     loadAndDownload(id: number): void;
     loadAndPlay(id: number): boolean;
     pause(status?: boolean): void;
-    play(call?: Call): boolean;
+    play(call?: Call, options?: { skipHistory?: boolean; force?: boolean }): boolean;
     queue(call: Call, options?: { priority?: boolean }): void;
     replay(): void;
     seek(seconds: number): boolean;
@@ -222,6 +236,15 @@ export interface ScannerActions {
     searchCalls(options: SearchOptions): void;
     toggleCategory(category: Category): void;
     enableQueuePersist(enabled: boolean): void;
+
+    // Unit-label pending state actions
+    markUnitLabelPending(systemId: number, unitId: number, label: string | null): void;
+    clearUnitLabelPending(systemId: number, unitId: number): void;
+
+    // Search-queue actions
+    playFromSearch(callId: number, playAll: boolean, laterCallIds: number[]): void;
+    skipSearchQueue(): boolean;
+    exitSearchQueue(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -390,12 +413,52 @@ function bootstrapAudio(): void {
 }
 
 // ---------------------------------------------------------------------------
+// beepDirect — play oscillator beep via the module-level beepContext
+// ---------------------------------------------------------------------------
+
+function beepDirect(
+    style: string,
+    keypadBeeps: Record<string, Beep[]>,
+): Promise<void> {
+    return new Promise((resolve) => {
+        const context = beepContext;
+        const seq = keypadBeeps[style];
+
+        if (!context || !seq) {
+            resolve();
+            return;
+        }
+
+        const gn = context.createGain();
+        gn.gain.value = 0.1;
+        gn.connect(context.destination);
+
+        seq.forEach((beep, index) => {
+            const osc = context.createOscillator();
+            osc.connect(gn);
+            osc.frequency.value = beep.frequency;
+            osc.type = beep.type;
+
+            if (index === seq.length - 1) {
+                osc.onended = () => resolve();
+            }
+
+            osc.start(context.currentTime + beep.begin);
+            osc.stop(context.currentTime + beep.end);
+        });
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Audio stop (mirrors Angular service stop())
 // ---------------------------------------------------------------------------
 
 function stopAudio(options?: { emit?: boolean }): void {
     stopAudioTimeLoop();
-    currentAudioTime = 0;
+    // Preserve currentAudioTime so the sticky LCD shows end-of-call position
+    // (e.g. ProgressTimestamp stays at call's end time instead of jumping to start).
+    // It's reset to 0 when a new call begins playback.
+    // currentAudioTime = 0;  // removed — intentionally preserved
 
     if (audioSource) {
         audioSource.onended = null;
@@ -694,6 +757,62 @@ function rebuildUnitsIndex(): void {
     $set({ unitsIndex });
 }
 
+// Clear pending-unit-label entries that have been confirmed by the server,
+// and drop any that have been pending too long (stale / lost ack).
+const PENDING_LABEL_STALE_MS = 15000;
+
+function reconcilePendingUnitLabels(): void {
+    const state = $get();
+    const { pendingUnitLabels, unitsIndex } = state;
+    const systemIds = Object.keys(pendingUnitLabels);
+    if (systemIds.length === 0) return;
+
+    const now = Date.now();
+    const next: typeof pendingUnitLabels = {};
+    let changed = false;
+
+    for (const sysKey of systemIds) {
+        const sysId = +sysKey;
+        const sysPending = pendingUnitLabels[sysId]!;
+        const sysIndex = unitsIndex[sysId] ?? {};
+        const keptSys: { [unitId: number]: { label: string | null; ts: number } } = {};
+
+        for (const unitKey of Object.keys(sysPending)) {
+            const unitId = +unitKey;
+            const entry = sysPending[unitId]!;
+            const serverLabel = sysIndex[unitId];
+            const serverLabelPresent = typeof serverLabel === 'string' && serverLabel.length > 0;
+
+            const confirmed = entry.label === null
+                ? !serverLabelPresent  // delete confirmed when server has no label
+                : serverLabelPresent && serverLabel === entry.label;
+
+            const stale = now - entry.ts > PENDING_LABEL_STALE_MS;
+
+            if (confirmed || stale) {
+                changed = true;
+                if (stale && !confirmed) {
+                    console.warn(
+                        `[rdio-scanner] Pending unit label for system=${sysId} unit=${unitId} went stale after ${PENDING_LABEL_STALE_MS}ms without server confirmation.`,
+                    );
+                }
+                continue;
+            }
+            keptSys[unitId] = entry;
+        }
+
+        if (Object.keys(keptSys).length > 0) {
+            next[sysId] = keptSys;
+        } else {
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        $set({ pendingUnitLabels: next });
+    }
+}
+
 // ---------------------------------------------------------------------------
 // localStorage save helpers
 // ---------------------------------------------------------------------------
@@ -874,10 +993,32 @@ function parseMessage(command: string, payload: unknown, flags?: string): void {
                 if (flag === WebSocketCallFlag.Download) {
                     download(payload as Call);
                 } else if (flag === WebSocketCallFlag.Play && call.id === $get().playbackPending) {
+                    // User-initiated playback (typically from search).
                     $set({ playbackPending: null });
-                    $get().queue(transformCall(call), { priority: true });
+                    const transformed = transformCall(call);
+                    const sq = $get().searchQueue;
+                    if (sq.active && sq.currentCallId === call.id) {
+                        // Search-queue playback -- bypass the normal queue and
+                        // play immediately, ignoring any paused state.
+                        stopAudio();
+                        $get().play(transformed, { skipHistory: false, force: true });
+                    } else {
+                        $get().queue(transformed, { priority: true });
+                    }
                 } else {
-                    $get().queue(transformCall(call));
+                    // Livefeed call arriving. If a search queue is active, buffer
+                    // it instead of enqueuing so it doesn't interrupt the user.
+                    const sq = $get().searchQueue;
+                    if (sq.active) {
+                        $set({
+                            searchQueue: {
+                                ...sq,
+                                pendingLivefeedCalls: [...sq.pendingLivefeedCalls, transformCall(call)],
+                            },
+                        });
+                    } else {
+                        $get().queue(transformCall(call));
+                    }
                 }
             }
             break;
@@ -941,6 +1082,7 @@ function parseMessage(command: string, payload: unknown, flags?: string): void {
             rebuildLivefeedMap();
             rebuildUnitsIndex();
             propagateUnitLabels();
+            reconcilePendingUnitLabels();
 
             const state = $get();
 
@@ -1067,6 +1209,7 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
     linked: false,
     config: defaultConfig,
     unitsIndex: {},
+    pendingUnitLabels: {},
     authRequired: false,
     authExpired: false,
     authTooMany: false,
@@ -1076,7 +1219,16 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
     categories: [],
     call: null,
     callPrevious: null,
+    callHistory: [],
     callQueue: [],
+    searchQueue: {
+        active: false,
+        currentCallId: null,
+        queuedCallIds: [],
+        playAll: false,
+        pendingLivefeedCalls: [],
+        preState: null,
+    } as SearchQueueState,
     callTime: 0,
     paused: false,
     pausedAt: null,
@@ -1254,7 +1406,9 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             return Promise.resolve();
         }
 
-        return audioManager.beep(style, state.config.keypadBeeps as unknown as Record<string, Beep[]>);
+        // Use the module-level beepContext directly (audioManager has its
+        // own context that was never bootstrapped).
+        return beepDirect(style, state.config.keypadBeeps as unknown as Record<string, Beep[]>);
     },
 
     holdSystem(options?: { resubscribe?: boolean }): void {
@@ -1447,11 +1601,20 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         }
     },
 
-    play(call?: Call): boolean {
+    play(call?: Call, options?: { skipHistory?: boolean; force?: boolean }): boolean {
         const state = get();
 
-        if (state.paused || skipDelayTimer !== undefined) {
+        // Allow `force: true` to override the paused guard. This is used by the
+        // search queue so calls can be played while the scanner is nominally
+        // paused (e.g. the user paused livefeed, then clicked ▶ in search).
+        if ((state.paused && !options?.force) || skipDelayTimer !== undefined) {
             return false;
+        }
+
+        // If we're forcing playback while the audio context is suspended
+        // (because the scanner is paused), resume it so audio actually plays.
+        if (options?.force && audioContext?.state === 'suspended') {
+            void audioContext.resume();
         }
 
         let currentCall: Call | null = null;
@@ -1475,7 +1638,16 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             return false;
         }
 
-        set({ call: currentCall });
+        // Push to call history (most recent first, dedup, cap at 30)
+        // Skip when replaying from history to avoid rotating the array.
+        if (options?.skipHistory) {
+            set({ call: currentCall });
+        } else {
+            const prevHistory = get().callHistory;
+            const deduped = prevHistory.filter((c) => c.id !== currentCall!.id);
+            const newHistory = [currentCall!, ...deduped].slice(0, 30);
+            set({ call: currentCall, callHistory: newHistory });
+        }
 
         // In the Angular service, queueCount and queueDuration are emitted.
         // In Zustand, consumers derive these from state directly.
@@ -1501,7 +1673,30 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
                 stopAudioTimeLoop();
                 currentAudioTime = buffer.duration;
                 set({ callTime: buffer.duration });
-                get().skip({ delay: true });
+
+                const sq = get().searchQueue;
+                if (sq.active) {
+                    // Auto-advance within the search queue when playAll is on.
+                    // When playAll is off, a single-call play ended, so exit.
+                    if (sq.playAll && sq.queuedCallIds.length > 0) {
+                        // Small delay so the LCD briefly shows the final state
+                        // of the ended call before the next begins.
+                        stopAudio();
+                        skipDelayTimer = setTimeout(() => {
+                            skipDelayTimer = undefined;
+                            get().skipSearchQueue();
+                        }, 1000);
+                    } else {
+                        // Queue exhausted (or single-play) -- exit the queue.
+                        stopAudio();
+                        skipDelayTimer = setTimeout(() => {
+                            skipDelayTimer = undefined;
+                            get().exitSearchQueue();
+                        }, 1000);
+                    }
+                } else {
+                    get().skip({ delay: true });
+                }
             };
             audioSource.start();
             audioSourceStartTime = audioContext.currentTime;
@@ -1580,6 +1775,25 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
     },
 
     skip(options?: { delay?: boolean }): boolean {
+        // When a search queue is active, skip jumps to the next queued search
+        // result (or exits the queue if none remain).
+        if (get().searchQueue.active) {
+            stopAudio();
+            if (options?.delay) {
+                skipDelayTimer = setTimeout(() => {
+                    skipDelayTimer = undefined;
+                    get().skipSearchQueue();
+                }, 1000);
+            } else {
+                if (skipDelayTimer !== undefined) {
+                    clearTimeout(skipDelayTimer);
+                    skipDelayTimer = undefined;
+                }
+                get().skipSearchQueue();
+            }
+            return true;
+        }
+
         const playNext = (): boolean => {
             if (get().livefeedMode === LivefeedMode.Playback) {
                 return playbackNextCall();
@@ -1722,6 +1936,189 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             doSaveQueueState();
         } else {
             clearQueueState(instanceId);
+        }
+    },
+
+    // Mark a unit label save as in-flight. Rendered teal in the UI until
+    // cleared (either by explicit clearUnitLabelPending() on failure, or by
+    // reconcilePendingUnitLabels() when the server confirms via config emission).
+    markUnitLabelPending(systemId: number, unitId: number, label: string | null): void {
+        const state = get();
+        const next = { ...state.pendingUnitLabels };
+        next[systemId] = { ...(next[systemId] ?? {}) };
+        next[systemId]![unitId] = { label, ts: Date.now() };
+        set({ pendingUnitLabels: next });
+    },
+
+    clearUnitLabelPending(systemId: number, unitId: number): void {
+        const state = get();
+        if (!state.pendingUnitLabels[systemId]?.[unitId]) return;
+        const next = { ...state.pendingUnitLabels };
+        const sysMap = { ...(next[systemId] ?? {}) };
+        delete sysMap[unitId];
+        if (Object.keys(sysMap).length === 0) {
+            delete next[systemId];
+        } else {
+            next[systemId] = sysMap;
+        }
+        set({ pendingUnitLabels: next });
+    },
+
+    // -----------------------------------------------------------------------
+    // Search queue -- playing calls from the Search panel. See
+    // SearchQueueState for architectural notes. The queue coexists with
+    // livefeed: livefeed stays subscribed, but incoming calls are buffered
+    // into pendingLivefeedCalls until the queue ends.
+    // -----------------------------------------------------------------------
+
+    playFromSearch(callId: number, playAll: boolean, laterCallIds: number[]): void {
+        if (!callId) return;
+
+        const state = get();
+
+        // Capture pre-queue snapshot the FIRST time we enter the queue, not
+        // on every subsequent click from the search page. pausedAt is
+        // captured verbatim so the pause/livefeed-button elapsed timers
+        // resume from their pre-queue values when the search queue exits --
+        // the user experience is "this search queue never happened" w.r.t.
+        // the live-feed timer readouts.
+        const preState = state.searchQueue.active
+            ? state.searchQueue.preState
+            : {
+                livefeedMode: state.livefeedMode,
+                paused: state.paused,
+                pausedAt: state.pausedAt,
+            };
+
+        // NOTE: we deliberately DO NOT clear callQueue here. The livefeed
+        // queue stays intact behind the search queue; the QueueTicker shows
+        // search calls first, then live calls, giving the user the sense of
+        // one unified queue. When the search queue ends, exitSearchQueue
+        // merges any calls buffered into pendingLivefeedCalls back onto the
+        // (still-present) callQueue and restores preState.paused.
+
+        if (skipDelayTimer !== undefined) {
+            clearTimeout(skipDelayTimer);
+            skipDelayTimer = undefined;
+        }
+
+        // Stop whatever is currently playing. stopAudio() sets call = null and
+        // moves it into callPrevious, which is fine; the sticky LCD keeps the
+        // display populated briefly.
+        stopAudio();
+
+        // If the scanner was paused, effectively "un-pause" for the duration
+        // of the search queue. We'll restore preState.paused when the queue
+        // ends. This also resumes the suspended audio context so force-play
+        // actually produces sound.
+        const wasPaused = state.paused;
+        if (wasPaused) {
+            set({ paused: false, pausedAt: null });
+            if (audioContext?.state === 'suspended') {
+                void audioContext.resume();
+            }
+            startAudioTimeLoop();
+        }
+
+        set({
+            playbackPending: callId,
+            searchQueue: {
+                active: true,
+                currentCallId: callId,
+                queuedCallIds: playAll ? [...laterCallIds] : [],
+                playAll,
+                pendingLivefeedCalls: state.searchQueue.pendingLivefeedCalls,
+                preState,
+            },
+        });
+
+        // Ask the server for the call audio. When it arrives, the Call-handler
+        // sees searchQueue.active and bypasses the normal queue, priority-
+        // forcing the call into play (see parseMessage Call handler).
+        getCall(callId, WebSocketCallFlag.Play);
+    },
+
+    skipSearchQueue(): boolean {
+        const state = get();
+        if (!state.searchQueue.active) return false;
+
+        const queue = state.searchQueue.queuedCallIds;
+
+        if (queue.length === 0) {
+            // Nothing left to play -- exit queue mode.
+            get().exitSearchQueue();
+            return false;
+        }
+
+        const [nextId, ...rest] = queue;
+
+        if (skipDelayTimer !== undefined) {
+            clearTimeout(skipDelayTimer);
+            skipDelayTimer = undefined;
+        }
+
+        stopAudio();
+
+        set({
+            playbackPending: nextId!,
+            searchQueue: {
+                ...state.searchQueue,
+                currentCallId: nextId!,
+                queuedCallIds: rest,
+            },
+        });
+
+        getCall(nextId!, WebSocketCallFlag.Play);
+        return true;
+    },
+
+    exitSearchQueue(): void {
+        const state = get();
+        if (!state.searchQueue.active) return;
+
+        const preState = state.searchQueue.preState;
+        const pendingLive = state.searchQueue.pendingLivefeedCalls;
+
+        // Flush buffered livefeed calls back into callQueue in arrival order.
+        // They'll play normally now that the search queue is inactive.
+        const mergedQueue = [...state.callQueue, ...pendingLive];
+
+        set({
+            callQueue: mergedQueue,
+            searchQueue: {
+                active: false,
+                currentCallId: null,
+                queuedCallIds: [],
+                playAll: state.searchQueue.playAll,  // preserve user's switch setting
+                pendingLivefeedCalls: [],
+                preState: null,
+            },
+        });
+
+        // Restore pre-queue pause state if needed. We don't un-pause if the
+        // user was paused before they hit ▶ from search -- that was their
+        // deliberate state. We bypass pause() for the true case so we can
+        // restore the ORIGINAL pausedAt (not "now"), which keeps the pause
+        // and live-feed elapsed timers continuous across the search queue.
+        if (preState) {
+            if (preState.paused && !get().paused) {
+                stopAudioTimeLoop();
+                set({
+                    paused: true,
+                    pausedAt: preState.pausedAt ?? new Date(),
+                    callTime: currentAudioTime,
+                });
+                void audioContext?.suspend();
+            } else if (!preState.paused && get().paused) {
+                // We shouldn't be paused right now, but just in case.
+                get().pause(false);
+            }
+        }
+
+        // If not paused, kick off playback of whatever's next (either a
+        // buffered livefeed call or nothing, which is fine).
+        if (!get().paused) {
+            get().play();
         }
     },
 }));

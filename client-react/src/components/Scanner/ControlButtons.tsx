@@ -15,6 +15,7 @@ const buttonBaseSx: SxProps<Theme> = {
   '--green': 'rgb(0, 230, 118)',
   '--red': 'rgb(255, 23, 68)',
   '--yellow': 'rgb(255, 234, 0)',
+  '--blue': 'rgb(41, 121, 255)',
   background: 'var(--def)',
   borderStyle: 'solid',
   borderWidth: 1,
@@ -50,7 +51,7 @@ const buttonBaseSx: SxProps<Theme> = {
 
 // Status LED dot pseudo-element mixin
 function statusDotSx(
-  state: 'off' | 'on' | 'partial' | undefined,
+  state: 'off' | 'on' | 'partial' | 'search' | undefined,
 ): SxProps<Theme> {
   if (!state) return {};
 
@@ -59,7 +60,9 @@ function statusDotSx(
       ? 'var(--green)'
       : state === 'partial'
         ? 'var(--yellow)'
-        : 'var(--red)';
+        : state === 'search'
+          ? 'var(--blue)'
+          : 'var(--red)';
 
   return {
     '&::after': {
@@ -83,19 +86,27 @@ function statusDotSx(
 interface RetroButtonProps {
   label: string;
   subLabel?: string;
-  state?: 'off' | 'on' | 'partial';
+  state?: 'off' | 'on' | 'partial' | 'search';
   onClick: () => void;
+  /**
+   * Extra styles merged LAST so they can override buttonBaseSx. Used when
+   * the button lives inside a positioning wrapper (e.g. PAUSE + close-X)
+   * and needs its own flex/margin neutralized to match the visual size of
+   * its un-wrapped siblings.
+   */
+  sxOverride?: SxProps<Theme>;
 }
 
-function RetroButton({ label, subLabel, state, onClick }: RetroButtonProps) {
+function RetroButton({ label, subLabel, state, onClick, sxOverride }: RetroButtonProps) {
   return (
     <Box
       component="button"
       onClick={onClick}
-      sx={{
-        ...buttonBaseSx,
-        ...statusDotSx(state),
-      } as SxProps<Theme>}
+      sx={[
+        buttonBaseSx,
+        statusDotSx(state),
+        ...(Array.isArray(sxOverride) ? sxOverride : sxOverride ? [sxOverride] : []),
+      ] as SxProps<Theme>}
     >
       {label}
       {subLabel && (
@@ -117,9 +128,10 @@ function RetroButton({ label, subLabel, state, onClick }: RetroButtonProps) {
 interface ControlButtonsProps {
   onOpenSearch: () => void;
   onOpenSelect: () => void;
+  onReplay: () => void;
 }
 
-export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsProps) {
+export function ControlButtons({ onOpenSearch, onOpenSelect, onReplay }: ControlButtonsProps) {
   const livefeedMode = useScannerStore((s) => s.livefeedMode);
   const paused = useScannerStore((s) => s.paused);
   const pausedAt = useScannerStore((s) => s.pausedAt);
@@ -129,6 +141,7 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
   const callPrevious = useScannerStore((s) => s.callPrevious);
   const config = useScannerStore((s) => s.config);
   const authRequired = useScannerStore((s) => s.authRequired);
+  const searchQueueActive = useScannerStore((s) => s.searchQueue.active);
 
   const store = useScannerStore.getState();
 
@@ -188,19 +201,13 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
   }, [authRequired, paused, store]);
 
   const handleReplay = useCallback(() => {
-    if (authRequired) return;
-    if (!paused && (call || callPrevious)) {
-      store.beep(BeepStyle.Activate);
-      store.replay();
-    } else {
-      store.beep(BeepStyle.Denied);
-    }
-  }, [authRequired, paused, call, callPrevious, store]);
+    onReplay();
+  }, [onReplay]);
 
   const handleSkip = useCallback(() => {
     if (authRequired) return;
     store.beep(BeepStyle.Activate);
-    store.skip();
+    store.skip({ delay: true });
   }, [authRequired, store]);
 
   const handleHoldTalkgroup = useCallback(() => {
@@ -289,12 +296,76 @@ export function ControlButtons({ onOpenSearch, onOpenSelect }: ControlButtonsPro
       <Box sx={rowSx}>
         <RetroButton label="Search Call" onClick={handleSearchCall} />
         <Box sx={spacerSx} />
-        <RetroButton
-          label="Pause"
-          subLabel={paused ? formatDuration(pausedElapsed, 0) : undefined}
-          state={paused ? 'on' : 'off'}
-          onClick={handlePause}
-        />
+        {/*
+          The wrapper acts as a drop-in replacement for a RetroButton in the
+          flex row -- it has the SAME `flex: 1` and `m: '2px'` that a direct
+          RetroButton would, so flex distribution treats it identically to
+          its siblings (SEARCH CALL / SELECT TG). The inner RetroButton
+          then has its own margin and flex zeroed out and fills the wrapper
+          at 100% width. Without this, the wrapper's "no margin" + the inner
+          button's 2px margin desync the flex math and PAUSE ends up visibly
+          narrower than its siblings.
+        */}
+        <Box sx={{ flex: 1, m: '2px', position: 'relative', display: 'block' }}>
+          <RetroButton
+            label="Pause"
+            subLabel={paused ? formatDuration(pausedElapsed, 0) : undefined}
+            state={
+              searchQueueActive
+                ? 'search'              // blue LED during search-queue playback
+                : paused
+                  ? 'on'
+                  : 'off'
+            }
+            onClick={handlePause}
+            sxOverride={{ m: 0, flex: 'none', width: '100%' }}
+          />
+          {searchQueueActive && (
+            <Box
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                store.beep(BeepStyle.Deactivate);
+                store.exitSearchQueue();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  store.beep(BeepStyle.Deactivate);
+                  store.exitSearchQueue();
+                }
+              }}
+              title="Exit search queue (resume livefeed)"
+              sx={{
+                position: 'absolute',
+                top: 2,
+                right: 2,
+                width: 18,
+                height: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'rgb(255, 100, 100)',
+                background: 'rgba(0, 0, 0, 0.4)',
+                border: '1px solid rgb(160, 60, 60)',
+                borderRadius: '2px',
+                cursor: 'pointer',
+                fontSize: 12,
+                lineHeight: 1,
+                fontWeight: 700,
+                userSelect: 'none',
+                zIndex: 1,
+                '&:hover': {
+                  background: 'rgba(120, 30, 30, 0.6)',
+                  color: 'rgb(255, 160, 160)',
+                },
+              }}
+            >
+              ×
+            </Box>
+          )}
+        </Box>
         <Box sx={spacerSx} />
         <RetroButton label="Select TG" onClick={handleSelectTg} />
       </Box>

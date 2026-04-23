@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { Box } from '@mui/material';
 import { useScannerStore } from '../../stores/scanner';
 import { useClock } from '../../hooks/useClock';
@@ -7,9 +7,10 @@ import { useDimmer } from '../../hooks/useDimmer';
 import { formatFrequency, formatAfs, formatDuration } from '../../utils/format';
 import { LED_COLORS, LED_COLOR_DEFAULT, LED_COLOR_OFF } from '../../utils/led-colors';
 import { UnitTimeline } from './UnitTimeline';
+import { registerTranscriptSlot } from '../../services/extension';
 import { AuthOverlay } from './AuthOverlay';
 import { CallHistory } from './CallHistory';
-import type { Call, CallFrequency as CallFreqType } from '../../types/scanner';
+import type { Call, CallFrequency as CallFreqType, CallSource as CallSourceType } from '../../types/scanner';
 
 // ---------------------------------------------------------------------------
 // Helper: check if a system uses AFS encoding
@@ -165,59 +166,112 @@ function ErrorSpikeDisplay({ call }: { call: Call | null }) {
 
 interface ScannerDisplayProps {
   onDoubleClick: () => void;
+  onEditUnit?: (call: Call, source: CallSourceType) => void;
 }
 
-export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
+export function ScannerDisplay({ onDoubleClick, onEditUnit }: ScannerDisplayProps) {
   const call = useScannerStore((s) => s.call);
   const callPrevious = useScannerStore((s) => s.callPrevious);
   const config = useScannerStore((s) => s.config);
   const linked = useScannerStore((s) => s.linked);
   const listeners = useScannerStore((s) => s.listeners);
   const callQueue = useScannerStore((s) => s.callQueue);
+  const searchQueue = useScannerStore((s) => s.searchQueue);
+  const playbackList = useScannerStore((s) => s.playbackList);
   const clock = useClock();
   const { isDimmed } = useDimmer(config.dimmerDelay);
 
   // Poke dimmer whenever callTime changes (activity)
   // This is handled implicitly by user interactions triggering the dimmer reset
 
-  const isAfs = call ? isAfsSystem(config.afs, call.talkgroup) : false;
+  // Use activeCall (call || callPrevious) so the LCD stays populated with the
+  // last call's metadata after playback ends — matches Angular behavior and
+  // gives the driver a moment to reflect on the context. Only cleared on
+  // explicit STOP or when a new call arrives.
+  const activeCall = call || callPrevious;
+  const displayCall = activeCall;
+  const isAfs = displayCall ? isAfsSystem(config.afs, displayCall.talkgroup) : false;
 
-  const callSystem = call
-    ? call.systemData?.label || `${call.system}`
+  const callSystem = displayCall
+    ? displayCall.systemData?.label || `${displayCall.system}`
     : 'System';
 
-  const callTag = call ? call.talkgroupData?.tag || '' : 'Tag';
+  const callTag = displayCall ? displayCall.talkgroupData?.tag || '' : 'Tag';
 
-  const callTalkgroup = call
-    ? call.talkgroupData?.label ||
-      `${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`
+  const callTalkgroup = displayCall
+    ? displayCall.talkgroupData?.label ||
+      `${isAfs ? formatAfs(displayCall.talkgroup) : displayCall.talkgroup}`
     : 'Talkgroup';
 
-  const callTalkgroupName = call
-    ? call.talkgroupData?.name || formatFrequency(call.frequency)
+  const callTalkgroupName = displayCall
+    ? displayCall.talkgroupData?.name || formatFrequency(displayCall.frequency)
     : 'Rdio Scanner';
 
-  const callTalkgroupId = call
+  const callTalkgroupId = displayCall
     ? isAfs
-      ? formatAfs(call.talkgroup)
-      : call.talkgroup.toString()
+      ? formatAfs(displayCall.talkgroup)
+      : displayCall.talkgroup.toString()
     : '0';
 
-  const callDuration = call?.audioDuration || 0;
+  const callDuration = displayCall?.audioDuration || 0;
+
+  // Stable callback ref for the extension transcript slot
+  const transcriptSlotRef = useCallback((el: HTMLElement | null) => {
+    registerTranscriptSlot(el);
+  }, []);
 
   // Avoid/patch flags
-  const activeCall = call || callPrevious;
   const { isAvoided, isAvoidedTimer, isPatched } = useScannerStore.getState();
   const avoided = activeCall ? isAvoided(activeCall) : false;
   const tempAvoid = activeCall ? isAvoidedTimer(activeCall) : 0;
   const patched = activeCall ? isPatched(activeCall) : false;
 
-  // Queue stats
-  const queueCount = callQueue.length;
-  const queueDuration = callQueue.reduce(
+  // Queue stats -----------------------------------------------------------
+  // The header shows TWO stats side-by-side when a search queue is active:
+  //   * Search stats (blue, italic, prefixed with "+") -- calls queued from
+  //     the Search page, shown FIRST because they play next.
+  //   * Live stats (green) -- calls from the normal livefeed queue, plus any
+  //     calls buffered into pendingLivefeedCalls during search-queue playback
+  //     (those will merge back into callQueue when the search queue ends).
+  //
+  // We deliberately keep the two counts separate rather than summing: the
+  // user asked for them to be visually distinct so the "search" portion is
+  // readable at a glance.
+  const liveQueueCount = callQueue.length + (
+    searchQueue.active ? searchQueue.pendingLivefeedCalls.length : 0
+  );
+  const liveQueueDuration = callQueue.reduce(
+    (sum, c) => sum + (c.audioDuration || 0),
+    0,
+  ) + (
+    searchQueue.active
+      ? searchQueue.pendingLivefeedCalls.reduce(
+          (sum, c) => sum + (c.audioDuration || 0),
+          0,
+        )
+      : 0
+  );
+
+  // Resolve search-queue ids via playbackList.results to get durations.
+  const searchQueueCalls: Call[] = useMemo(() => {
+    if (!searchQueue.active || !playbackList?.results) return [];
+    return searchQueue.queuedCallIds
+      .map((id) => playbackList.results.find((c) => c?.id === id))
+      .filter((c): c is Call => !!c);
+  }, [searchQueue.active, searchQueue.queuedCallIds, playbackList]);
+  const searchQueueCount = searchQueueCalls.length;
+  const searchQueueDuration = searchQueueCalls.reduce(
     (sum, c) => sum + (c.audioDuration || 0),
     0,
   );
+
+  const showSearchStats = searchQueue.active;
+
+  // Search-indicator blue. Brighter/more saturated than LED_COLORS.blue so
+  // it pops against the olive LCD background (rgb(190, 190, 174)).
+  // LED_COLORS.blue (rgb(41, 121, 255)) is too desaturated against khaki to
+  // read comfortably; this is a near-"deep sky blue" tuned for contrast.
+  const SEARCH_COLOR = 'rgb(0, 200, 255)';
 
   // Time format
   const timeFormat: Intl.DateTimeFormatOptions = config.time12hFormat
@@ -255,6 +309,7 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
         lineHeight: '20px',
         p: 1,
         maxHeight: '60vh',
+        overflow: 'hidden',
         position: 'relative',
         mb: 3,
       }}
@@ -284,20 +339,55 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
         <Box
           sx={{
             '& > span': { display: 'inline-block' },
-            '& .value': queueCount > 0
+            // Live (green) value color -- applied when there's anything to
+            // show so the numbers pop against the LCD background. We DO show
+            // the live portion even when liveQueueCount === 0, as long as a
+            // search queue is active, so "Q: 8+0" reads correctly.
+            '& .value.live': (liveQueueCount > 0 || showSearchStats)
               ? {
                   color: 'rgb(0, 230, 118)',
                   textShadow:
                     '-1px -1px 0 rgba(0,0,0,0.9), 1px -1px 0 rgba(0,0,0,0.9), -1px 1px 0 rgba(0,0,0,0.9), 1px 1px 0 rgba(0,0,0,0.9)',
                 }
               : {},
+            // Search (blue, italic) value color.
+            '& .value.search': {
+              color: SEARCH_COLOR,
+              fontStyle: 'italic',
+              textShadow:
+                '-1px -1px 0 rgba(0,0,0,0.9), 1px -1px 0 rgba(0,0,0,0.9), -1px 1px 0 rgba(0,0,0,0.9), 1px 1px 0 rgba(0,0,0,0.9)',
+            },
+            '& .plus': {
+              opacity: 0.7,
+              padding: '0 2px',
+            },
           }}
         >
+          {/* Count: "Q: N" normally; "Q: S+N" when a search queue is active. */}
           <span style={{ marginRight: 10, minWidth: 45, display: 'inline-block' }}>
-            Q: <span className="value">{queueCount}</span>
+            Q:{' '}
+            {showSearchStats && (
+              <>
+                <span className="value search">{searchQueueCount}</span>
+                <span className="plus">+</span>
+              </>
+            )}
+            <span className="value live">{liveQueueCount}</span>
           </span>
+          {/* Duration: matching layout, "S+L" when search queue is active. */}
           <span style={{ minWidth: 80, display: 'inline-block' }}>
-            {'⏲'}: <span className="value">{formatDuration(queueDuration, 0)}s</span>
+            {'⏲'}:{' '}
+            {showSearchStats && (
+              <>
+                <span className="value search">
+                  {formatDuration(searchQueueDuration, 0)}s
+                </span>
+                <span className="plus">+</span>
+              </>
+            )}
+            <span className="value live">
+              {formatDuration(liveQueueDuration, 0)}s
+            </span>
           </span>
         </Box>
       </Box>
@@ -315,7 +405,7 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
           <span>{callDuration.toFixed(1)}s</span>
           {' '}
           {'\u2014 '}
-          <ProgressTimestamp call={call} time12hFormat={config.time12hFormat} />
+          <ProgressTimestamp call={displayCall} time12hFormat={config.time12hFormat} />
         </Box>
       </Box>
 
@@ -333,7 +423,7 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
 
       {/* Frequency / TGID row */}
       <Box sx={rowSx}>
-        <Box><FrequencyDisplay call={call} /></Box>
+        <Box><FrequencyDisplay call={displayCall} /></Box>
         <Box><span>TGID: {callTalkgroupId || '0'}</span></Box>
       </Box>
 
@@ -347,17 +437,24 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
         }}
       >
         <Box>
-          <ErrorSpikeDisplay call={call} />
+          <ErrorSpikeDisplay call={displayCall} />
         </Box>
-        <Box>
-          {call && (
-            <UnitTimeline
-              call={call}
-              callDuration={callDuration}
-            />
-          )}
+        {/* Seekbar / unit timeline tracks live playback — it disappears
+            when the call ends (the text metadata above stays "sticky"). */}
+        <Box sx={{ visibility: call ? 'visible' : 'hidden' }}>
+          <UnitTimeline
+            call={call}
+            callDuration={call?.audioDuration || 0}
+            onEditUnit={onEditUnit}
+          />
         </Box>
       </Box>
+
+      {/* Extension slot: transcript area (stable anchor for browser extensions) */}
+      <Box
+        ref={transcriptSlotRef}
+        sx={{ width: '100%' }}
+      />
 
       {/* Flags row (avoid/patch/timer) */}
       <Box
@@ -415,11 +512,11 @@ export function ScannerDisplay({ onDoubleClick }: ScannerDisplayProps) {
       {/* Small spacer */}
       <Box sx={{ ...rowSx, fontSize: 12, height: 14 }} />
 
-      {/* Auth overlay + History wrapper */}
-      <Box sx={{ position: 'relative', maxHeight: '40vh', overflow: 'hidden' }}>
+      {/* Auth overlay + History */}
+      <Box sx={{ position: 'relative' }}>
         <AuthOverlay />
-        <CallHistory />
       </Box>
+      <CallHistory onEditUnit={onEditUnit} />
     </Box>
   );
 }

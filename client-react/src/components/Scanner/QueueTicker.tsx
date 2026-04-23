@@ -34,10 +34,12 @@ function QueuedCallChip({
   call,
   prefersReducedMotion,
   showSeparator,
+  source,
 }: {
   call: Call;
   prefersReducedMotion: boolean;
   showSeparator: boolean;
+  source: 'search' | 'live';
 }) {
   const variants = prefersReducedMotion
     ? reducedMotionVariants
@@ -55,6 +57,11 @@ function QueuedCallChip({
   const ledColor = call.talkgroupData?.led ?? 'green';
   const textColor = LED_COLORS[ledColor] ?? LED_COLORS.green;
 
+  // Search-queue chips get a subtle italic treatment so users can tell
+  // them apart from live-feed chips in the unified ticker.
+  const chipStyle =
+    source === 'search' ? { fontStyle: 'italic' as const } : undefined;
+
   return (
     <motion.span
       layout
@@ -68,6 +75,7 @@ function QueuedCallChip({
           ? 'linear'
           : [0.4, 0.0, 0.2, 1],
       }}
+      style={chipStyle}
     >
       {showSeparator && ', '}
       <span style={{ whiteSpace: 'nowrap' }}>
@@ -89,12 +97,39 @@ function QueuedCallChip({
   );
 }
 
+type TickerEntry = { call: Call; source: 'search' | 'live' };
+
 // ---------------------------------------------------------------------------
 // QueueTicker component
 // ---------------------------------------------------------------------------
 
 export function QueueTicker() {
   const callQueue = useScannerStore((s) => s.callQueue);
+  const searchQueue = useScannerStore((s) => s.searchQueue);
+  const playbackList = useScannerStore((s) => s.playbackList);
+
+  // Build the unified list: search-queue upcoming calls on the left
+  // (front of ticker = plays soonest), then live-feed calls on the right.
+  // Live-feed calls include both whatever's already in callQueue and any
+  // arriving calls that were buffered into pendingLivefeedCalls during
+  // search-queue playback.
+  const entries: TickerEntry[] = useMemo(() => {
+    const searchCalls: Call[] =
+      searchQueue.active && playbackList?.results
+        ? searchQueue.queuedCallIds
+            .map((id) => playbackList.results.find((c) => c?.id === id))
+            .filter((c): c is Call => !!c)
+        : [];
+
+    const liveCalls: Call[] = searchQueue.active
+      ? [...callQueue, ...searchQueue.pendingLivefeedCalls]
+      : callQueue;
+
+    return [
+      ...searchCalls.map<TickerEntry>((call) => ({ call, source: 'search' })),
+      ...liveCalls.map<TickerEntry>((call) => ({ call, source: 'live' })),
+    ];
+  }, [callQueue, searchQueue, playbackList]);
 
   // Detect reduced motion preference
   const prefersReducedMotion = useMemo(() => {
@@ -102,17 +137,17 @@ export function QueueTicker() {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
 
-  const shouldFade = callQueue.length > FADE_THRESHOLD;
+  const shouldFade = entries.length > FADE_THRESHOLD;
 
-  const startCalls = shouldFade
-    ? callQueue.slice(0, START_COUNT)
-    : callQueue;
+  const startEntries = shouldFade
+    ? entries.slice(0, START_COUNT)
+    : entries;
 
-  const endCalls = shouldFade
-    ? callQueue.slice(-END_COUNT)
+  const endEntries = shouldFade
+    ? entries.slice(-END_COUNT)
     : [];
 
-  if (callQueue.length === 0) {
+  if (entries.length === 0) {
     return <Box sx={{ flex: 1 }} />;
   }
 
@@ -138,10 +173,11 @@ export function QueueTicker() {
     >
       {!shouldFade && (
         <AnimatePresence mode="popLayout">
-          {startCalls.map((call, i) => (
+          {startEntries.map((entry, i) => (
             <QueuedCallChip
-              key={call.id}
-              call={call}
+              key={`${entry.source}-${entry.call.id}`}
+              call={entry.call}
+              source={entry.source}
               prefersReducedMotion={prefersReducedMotion}
               showSeparator={i > 0}
             />
@@ -151,7 +187,7 @@ export function QueueTicker() {
 
       {shouldFade && (
         <>
-          {/* Left side: first 3 calls, fades right */}
+          {/* Left side: first 3 entries (search-queue first, then live), fades right */}
           <Box
             sx={{
               display: 'inline-block',
@@ -166,10 +202,11 @@ export function QueueTicker() {
             }}
           >
             <AnimatePresence mode="popLayout">
-              {startCalls.map((call, i) => (
+              {startEntries.map((entry, i) => (
                 <QueuedCallChip
-                  key={call.id}
-                  call={call}
+                  key={`${entry.source}-${entry.call.id}`}
+                  call={entry.call}
+                  source={entry.source}
                   prefersReducedMotion={prefersReducedMotion}
                   showSeparator={i > 0}
                 />
@@ -177,7 +214,7 @@ export function QueueTicker() {
             </AnimatePresence>
           </Box>
 
-          {/* Right side: last 3 calls, fades left */}
+          {/* Right side: last 3 entries, fades left */}
           <Box
             sx={{
               display: 'flex',
@@ -192,10 +229,11 @@ export function QueueTicker() {
             }}
           >
             <AnimatePresence mode="popLayout">
-              {endCalls.map((call, i) => (
+              {endEntries.map((entry, i) => (
                 <QueuedCallChip
-                  key={call.id}
-                  call={call}
+                  key={`${entry.source}-${entry.call.id}`}
+                  call={entry.call}
+                  source={entry.source}
                   prefersReducedMotion={prefersReducedMotion}
                   showSeparator={i > 0}
                 />

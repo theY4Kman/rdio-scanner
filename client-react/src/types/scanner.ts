@@ -157,6 +157,39 @@ export interface PlaybackList {
     results: Call[];
 }
 
+/**
+ * Runtime state for the "play from search" queue. This coexists with the
+ * livefeed: incoming livefeed calls are buffered separately while a search
+ * queue is active, and once the queue ends the buffered calls (plus any
+ * pre-queue pause/livefeed state) are restored.
+ */
+export interface SearchQueueState {
+    /** True while at least one call from the search queue is playing or queued. */
+    active: boolean;
+    /** The call id currently playing from the search queue. */
+    currentCallId: number | null;
+    /** Remaining call ids to play (not including the currently playing one). */
+    queuedCallIds: number[];
+    /** Whether to auto-advance through `queuedCallIds` when each call ends. */
+    playAll: boolean;
+    /**
+     * Livefeed calls that arrived during search-queue playback. These are not
+     * added to callQueue / callHistory until the search queue ends.
+     */
+    pendingLivefeedCalls: Call[];
+    /**
+     * Snapshot of scanner state captured when the search queue started, so we
+     * can restore it when the queue finishes. `pausedAt` is captured verbatim
+     * so the pause/livefeed-button elapsed timer resumes from where it was,
+     * rather than resetting to 0 the moment the search queue exits.
+     */
+    preState: {
+        livefeedMode: LivefeedMode;
+        paused: boolean;
+        pausedAt: Date | null;
+    } | null;
+}
+
 export interface UnitsIndex {
     [systemId: number]: {
         [unitId: number]: string;
