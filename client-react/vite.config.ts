@@ -29,6 +29,9 @@ export default defineConfig({
   build: {
     outDir: '../server/webapp',
     emptyOutDir: true,
+    // Emit .js.map / .css.map alongside bundles so DevTools can show
+    // original TS sources instead of minified output.
+    sourcemap: true,
   },
   server: {
     proxy: {

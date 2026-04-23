@@ -143,6 +143,8 @@ func main() {
 				switch path.Ext(url) {
 				case ".js":
 					t = "text/javascript" // see https://github.com/golang/go/issues/32350
+				case ".map":
+					t = "application/json"
 				default:
 					t = mime.TypeByExtension(path.Ext(url))
 				}
