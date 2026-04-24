@@ -168,22 +168,35 @@ let pendingPassword = '';
 let pendingRestoreSeek: { id: number; seek: number } | undefined;
 
 /**
- * Periodic save timer for active-call seek position. Started whenever a
- * call begins playback; cleared on pause, stop, or call end. Saves every
- * 2s so a crash/reload loses at most ~2s of seek position.
+ * beforeunload / pagehide handler refs so we can unregister on destroy().
+ * These flush one final doSaveQueueState() so the seek position of the
+ * currently-playing call is captured at reload time. Crash recovery
+ * isn't a goal here -- we accept that a hard kill loses a few seconds
+ * of seek precision in exchange for avoiding a periodic save timer.
  */
-let persistSeekTimer: ReturnType<typeof setInterval> | undefined;
-function startPersistSeekTimer(): void {
-    if (persistSeekTimer !== undefined) return;
-    persistSeekTimer = setInterval(() => {
-        doSaveQueueState();
-    }, 2000);
+let persistUnloadHandler: (() => void) | undefined;
+function installPersistUnloadHandler(): void {
+    if (persistUnloadHandler !== undefined || typeof window === 'undefined') return;
+    const handler = () => {
+        try {
+            doSaveQueueState();
+        } catch {
+            // swallow -- we're on our way out; localStorage quota errors etc.
+            // shouldn't prevent the page from unloading.
+        }
+    };
+    persistUnloadHandler = handler;
+    // pagehide fires reliably on mobile/PWA (including bfcache navigations);
+    // beforeunload covers desktop reload/close. Registering both is safe --
+    // whichever fires first runs the save; a subsequent call is idempotent.
+    window.addEventListener('beforeunload', handler);
+    window.addEventListener('pagehide', handler);
 }
-function stopPersistSeekTimer(): void {
-    if (persistSeekTimer !== undefined) {
-        clearInterval(persistSeekTimer);
-        persistSeekTimer = undefined;
-    }
+function removePersistUnloadHandler(): void {
+    if (persistUnloadHandler === undefined || typeof window === 'undefined') return;
+    window.removeEventListener('beforeunload', persistUnloadHandler);
+    window.removeEventListener('pagehide', persistUnloadHandler);
+    persistUnloadHandler = undefined;
 }
 
 // AudioManager instance kept for potential future use (e.g. direct playback)
@@ -494,9 +507,6 @@ function beepDirect(
 
 function stopAudio(options?: { emit?: boolean }): void {
     stopAudioTimeLoop();
-    // Pause the periodic Persist-Q saver; whatever starts next (play(),
-    // another call, or genuine idle) will restart it or not as appropriate.
-    stopPersistSeekTimer();
     // Preserve currentAudioTime so the sticky LCD shows end-of-call position
     // (e.g. ProgressTimestamp stays at call's end time instead of jumping to start).
     // It's reset to 0 when a new call begins playback.
@@ -1335,6 +1345,7 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
     initialize(): void {
         bootstrapAudio();
         openWebSocket();
+        installPersistUnloadHandler();
     },
 
     destroy(): void {
@@ -1353,7 +1364,7 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         queuePersistRestoring = false;
         queueRestoreOpportunityConsumed = false;
         pendingRestoreSeek = undefined;
-        stopPersistSeekTimer();
+        removePersistUnloadHandler();
     },
 
     authenticate(password: string): void {
@@ -1682,9 +1693,10 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
 
             void audioContext?.suspend();
 
-            // Stop the periodic seek saver -- nothing's advancing anymore.
-            // Persist the final paused-at seek once so reloads resume here.
-            stopPersistSeekTimer();
+            // Persist the paused-at seek once so a reload resumes here.
+            // (Live playback also flushes on beforeunload, so there's no
+            // periodic saver -- this is just to make pause-then-reload
+            // land on the exact frozen position.)
             doSaveQueueState();
         } else {
             set({
@@ -1694,14 +1706,6 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
 
             void audioContext?.resume();
             startAudioTimeLoop();
-
-            // If there's an already-decoded audioSource, playback is just
-            // resuming; restart the periodic saver so progress gets
-            // persisted. If play() is about to pull a new call from the
-            // queue, it'll (re)start the timer itself.
-            if (get().call && audioSource) {
-                startPersistSeekTimer();
-            }
 
             get().play();
         }
@@ -1843,15 +1847,14 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             get().skip({ delay: false });
         });
 
-        // Active call changed: persist it (with current seek) and start the
-        // periodic-save timer so the saved state tracks progress. Update
-        // currentAudioTime synchronously so the save reflects the intended
-        // seek offset even though decode hasn't finished yet -- otherwise a
-        // reload in the narrow window between play() and decode-callback
-        // would snap back to 0 on next restore.
+        // Active call changed. The beforeunload handler will capture the
+        // seek at reload time; we do an eager save here too so the
+        // *identity* of the active call is persisted (the queue just lost
+        // this call via shift()). Update currentAudioTime synchronously so
+        // this save records the intended seek offset even though the async
+        // decode hasn't finished yet.
         currentAudioTime = seekTo ?? 0;
         doSaveQueueState();
-        startPersistSeekTimer();
 
         return true;
     },
@@ -1912,9 +1915,6 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         set({ callTime: seconds });
         // Notify subscribers immediately so UI updates without waiting for next rAF
         audioTimeSubscribers.forEach((cb) => cb());
-
-        // Persist the new seek position so a reload picks up here.
-        doSaveQueueState();
 
         return true;
     },
