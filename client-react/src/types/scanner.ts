@@ -147,6 +147,17 @@ export interface QueuePersistState {
     livefeedMode: LivefeedMode;
     livefeedMap: LivefeedMap;
     livefeedUnitsMap?: LivefeedUnitsMap;
+    /**
+     * Currently-active call (state.call) at the time of save, including its
+     * current seek position in seconds. On restore this call is prepended
+     * into the fetched queue and the seek offset is applied to its first
+     * playback, so the user resumes mid-call from exactly where they left
+     * off. Omitted when no call was active (e.g. scanner was idle).
+     */
+    activeCall?: {
+        id: number;
+        seek: number;
+    };
 }
 
 export interface PlaybackList {

@@ -157,6 +157,35 @@ let queueRestoreOpportunityConsumed = false;
 let instanceId = 'default';
 let pendingPassword = '';
 
+/**
+ * Seek offset (in seconds) to apply to a specific call id on its first
+ * play() after a Persist-Q restore. Keyed by call id so it survives any
+ * reordering between the restore fetch and the actual playback (and so
+ * we won't accidentally apply the offset to the wrong call if the
+ * originally-active one got pushed back in the queue for any reason).
+ * Consumed-and-cleared when that call's play() runs.
+ */
+let pendingRestoreSeek: { id: number; seek: number } | undefined;
+
+/**
+ * Periodic save timer for active-call seek position. Started whenever a
+ * call begins playback; cleared on pause, stop, or call end. Saves every
+ * 2s so a crash/reload loses at most ~2s of seek position.
+ */
+let persistSeekTimer: ReturnType<typeof setInterval> | undefined;
+function startPersistSeekTimer(): void {
+    if (persistSeekTimer !== undefined) return;
+    persistSeekTimer = setInterval(() => {
+        doSaveQueueState();
+    }, 2000);
+}
+function stopPersistSeekTimer(): void {
+    if (persistSeekTimer !== undefined) {
+        clearInterval(persistSeekTimer);
+        persistSeekTimer = undefined;
+    }
+}
+
 // AudioManager instance kept for potential future use (e.g. direct playback)
 const _audioManager = new AudioManager(); void _audioManager;
 
@@ -238,7 +267,7 @@ export interface ScannerActions {
     loadAndDownload(id: number): void;
     loadAndPlay(id: number): boolean;
     pause(status?: boolean): void;
-    play(call?: Call, options?: { skipHistory?: boolean; force?: boolean }): boolean;
+    play(call?: Call, options?: { skipHistory?: boolean; force?: boolean; seekTo?: number }): boolean;
     queue(call: Call, options?: { priority?: boolean }): void;
     replay(): void;
     seek(seconds: number): boolean;
@@ -465,6 +494,9 @@ function beepDirect(
 
 function stopAudio(options?: { emit?: boolean }): void {
     stopAudioTimeLoop();
+    // Pause the periodic Persist-Q saver; whatever starts next (play(),
+    // another call, or genuine idle) will restart it or not as appropriate.
+    stopPersistSeekTimer();
     // Preserve currentAudioTime so the sticky LCD shows end-of-call position
     // (e.g. ProgressTimestamp stays at call's end time instead of jumping to start).
     // It's reset to 0 when a new call begins playback.
@@ -843,7 +875,16 @@ function doSaveLivefeedMap(): void {
 
 function doSaveQueueState(): void {
     const state = $get();
-    if (!state.queuePersistEnabled || state.callQueue.length === 0) {
+    if (!state.queuePersistEnabled) {
+        return;
+    }
+
+    const hasActive = state.call != null;
+    const hasQueued = state.callQueue.length > 0;
+    if (!hasActive && !hasQueued) {
+        // Nothing worth persisting -- clear any stale saved state so a later
+        // reload doesn't try to restore yesterday's queue.
+        clearQueueState(instanceId);
         return;
     }
 
@@ -854,6 +895,18 @@ function doSaveQueueState(): void {
         livefeedMap: state.livefeedMap,
         livefeedUnitsMap: state.livefeedUnitsMap,
     };
+
+    if (state.call) {
+        // Clamp seek to the audible range in case something upstream got
+        // into a weird state (e.g. currentAudioTime ran past duration).
+        const duration = state.call.audioDuration ?? 0;
+        const raw = currentAudioTime;
+        const seek = Math.max(0, Math.min(raw, duration));
+        persistState.activeCall = {
+            id: state.call.id,
+            seek,
+        };
+    }
 
     saveQueueState(instanceId, persistState);
 }
@@ -880,7 +933,23 @@ function restoreQueueState(): void {
         return;
     }
 
-    if (savedState.callIds && savedState.callIds.length > 0) {
+    // Merge the active-call id (if any) into the front of the restore list
+    // so it refetches alongside the queued calls. Dedup in case somehow it's
+    // also already in callIds. The saved seek offset is stashed in
+    // pendingRestoreSeek keyed by call id and consumed by the play() that
+    // picks up that specific call.
+    const queuedIds = savedState.callIds ?? [];
+    let restoreIds: number[];
+    if (savedState.activeCall) {
+        const activeId = savedState.activeCall.id;
+        restoreIds = [activeId, ...queuedIds.filter((id) => id !== activeId)];
+        pendingRestoreSeek = { id: activeId, seek: savedState.activeCall.seek };
+    } else {
+        restoreIds = queuedIds;
+        pendingRestoreSeek = undefined;
+    }
+
+    if (restoreIds.length > 0) {
         if (savedState.livefeedMode) {
             $set({ livefeedMode: savedState.livefeedMode });
         }
@@ -897,7 +966,7 @@ function restoreQueueState(): void {
 
         queuePersistRestoring = true;
 
-        fetchCallsBulk(savedState.callIds);
+        fetchCallsBulk(restoreIds);
     }
 }
 
@@ -1283,6 +1352,8 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         queuePersistPendingBatches = [];
         queuePersistRestoring = false;
         queueRestoreOpportunityConsumed = false;
+        pendingRestoreSeek = undefined;
+        stopPersistSeekTimer();
     },
 
     authenticate(password: string): void {
@@ -1610,6 +1681,11 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             });
 
             void audioContext?.suspend();
+
+            // Stop the periodic seek saver -- nothing's advancing anymore.
+            // Persist the final paused-at seek once so reloads resume here.
+            stopPersistSeekTimer();
+            doSaveQueueState();
         } else {
             set({
                 paused: false,
@@ -1619,11 +1695,19 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             void audioContext?.resume();
             startAudioTimeLoop();
 
+            // If there's an already-decoded audioSource, playback is just
+            // resuming; restart the periodic saver so progress gets
+            // persisted. If play() is about to pull a new call from the
+            // queue, it'll (re)start the timer itself.
+            if (get().call && audioSource) {
+                startPersistSeekTimer();
+            }
+
             get().play();
         }
     },
 
-    play(call?: Call, options?: { skipHistory?: boolean; force?: boolean }): boolean {
+    play(call?: Call, options?: { skipHistory?: boolean; force?: boolean; seekTo?: number }): boolean {
         const state = get();
 
         // Allow `force: true` to override the paused guard. This is used by the
@@ -1640,6 +1724,11 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         }
 
         let currentCall: Call | null = null;
+        // Pulled-from-queue flag: we consume a pending Persist-Q seek only
+        // when we're pulling the first call off the restored queue, not when
+        // the caller explicitly hands us a call (that's a Replay/search path
+        // and shouldn't be offset).
+        let pulledFromQueue = false;
 
         if (call?.audio) {
             if (state.call) {
@@ -1654,10 +1743,24 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             const queue = [...state.callQueue];
             currentCall = queue.shift() || null;
             set({ callQueue: queue });
+            pulledFromQueue = true;
         }
 
         if (!currentCall?.audio) {
             return false;
+        }
+
+        // Consume a pending Persist-Q seek when the queue-popped call matches
+        // the one we saved mid-playback. We only clear pendingRestoreSeek on
+        // match -- if the ids differ (e.g. the BulkCall response reordered
+        // the saved active call later in the queue), leave the seek waiting
+        // so it can still be applied when its call eventually comes up.
+        let seekTo = options?.seekTo;
+        if (seekTo == null && pulledFromQueue && pendingRestoreSeek !== undefined) {
+            if (pendingRestoreSeek.id === currentCall.id) {
+                seekTo = pendingRestoreSeek.seek;
+                pendingRestoreSeek = undefined;
+            }
         }
 
         // Push to call history (most recent first, dedup, cap at 30)
@@ -1720,11 +1823,18 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
                     get().skip({ delay: true });
                 }
             };
-            audioSource.start();
-            audioSourceStartTime = audioContext.currentTime;
+            // Clamp seekTo into [0, duration) so we don't start past the end
+            // (which would trigger onended immediately). Tiny epsilon guards
+            // against floating-point slop.
+            const duration = buffer.duration;
+            const rawSeek = seekTo ?? 0;
+            const offset = Math.max(0, Math.min(rawSeek, Math.max(0, duration - 0.01)));
 
-            set({ callTime: 0 });
-            currentAudioTime = 0;
+            audioSource.start(0, offset);
+            audioSourceStartTime = audioContext.currentTime - offset;
+
+            set({ callTime: offset });
+            currentAudioTime = offset;
 
             // Start rAF-based time updates (bypasses Zustand for smooth 60fps)
             startAudioTimeLoop();
@@ -1732,6 +1842,16 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
             // Decode error -- skip
             get().skip({ delay: false });
         });
+
+        // Active call changed: persist it (with current seek) and start the
+        // periodic-save timer so the saved state tracks progress. Update
+        // currentAudioTime synchronously so the save reflects the intended
+        // seek offset even though decode hasn't finished yet -- otherwise a
+        // reload in the narrow window between play() and decode-callback
+        // would snap back to 0 on next restore.
+        currentAudioTime = seekTo ?? 0;
+        doSaveQueueState();
+        startPersistSeekTimer();
 
         return true;
     },
@@ -1792,6 +1912,9 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
         set({ callTime: seconds });
         // Notify subscribers immediately so UI updates without waiting for next rAF
         audioTimeSubscribers.forEach((cb) => cb());
+
+        // Persist the new seek position so a reload picks up here.
+        doSaveQueueState();
 
         return true;
     },
