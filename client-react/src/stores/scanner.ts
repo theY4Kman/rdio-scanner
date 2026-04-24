@@ -1775,20 +1775,27 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
     },
 
     skip(options?: { delay?: boolean }): boolean {
+        // If we're already sitting in the inter-call delay (the 1s pause
+        // between calls), a second skip press means "now, not later" --
+        // cancel the pending delay and advance immediately, regardless of
+        // what the caller asked for.
+        const inDelay = skipDelayTimer !== undefined;
+        const wantDelay = !inDelay && !!options?.delay;
+        if (inDelay) {
+            clearTimeout(skipDelayTimer);
+            skipDelayTimer = undefined;
+        }
+
         // When a search queue is active, skip jumps to the next queued search
         // result (or exits the queue if none remain).
         if (get().searchQueue.active) {
             stopAudio();
-            if (options?.delay) {
+            if (wantDelay) {
                 skipDelayTimer = setTimeout(() => {
                     skipDelayTimer = undefined;
                     get().skipSearchQueue();
                 }, 1000);
             } else {
-                if (skipDelayTimer !== undefined) {
-                    clearTimeout(skipDelayTimer);
-                    skipDelayTimer = undefined;
-                }
                 get().skipSearchQueue();
             }
             return true;
@@ -1804,21 +1811,15 @@ export const useScannerStore = create<ScannerState & ScannerActions>()((set, get
 
         stopAudio();
 
-        if (options?.delay) {
+        if (wantDelay) {
             skipDelayTimer = setTimeout(() => {
                 skipDelayTimer = undefined;
                 playNext();
             }, 1000);
             return true;
-
-        } else {
-            if (skipDelayTimer !== undefined) {
-                clearTimeout(skipDelayTimer);
-                skipDelayTimer = undefined;
-            }
-
-            return playNext();
         }
+
+        return playNext();
     },
 
     startLivefeed(): void {
