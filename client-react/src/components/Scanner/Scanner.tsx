@@ -8,7 +8,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useScannerStore, getAudioTimeSnapshot } from '../../stores/scanner';
+import { useScannerStore, getAudioTimeSnapshot, isSkipDelayActive } from '../../stores/scanner';
 import { BeepStyle, LivefeedMode } from '../../types/scanner';
 import type { Call, CallSource as CallSourceType } from '../../types/scanner';
 import { installExtensionApi } from '../../services/extension';
@@ -200,6 +200,14 @@ export default function Scanner() {
       if (authRequired) return;
       const s = store();
       const call = s.call;
+      // During the 1s inter-call delay, s.call is null (stopAudio clears it
+      // before the timer). Mirror the Skip Next behavior: treat the press as
+      // "advance now" and jump straight to the next call.
+      if (!call && isSkipDelayActive()) {
+        s.beep(BeepStyle.Activate);
+        s.skip();
+        return;
+      }
       if (!call?.sources?.length) {
         // No sources — fall back to skip entire call (no delay)
         s.beep(s.call ? BeepStyle.Activate : BeepStyle.Denied);

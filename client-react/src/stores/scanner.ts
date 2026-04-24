@@ -134,6 +134,16 @@ let ws: WebSocket | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let skipDelayTimer: ReturnType<typeof setTimeout> | undefined;
 
+/**
+ * True while we're in the inter-call delay (the 1s pause the onended handler
+ * schedules before auto-advancing to the next call). Hotkeys / UI that want
+ * to act differently during this window -- e.g. Skip Unit treating the delay
+ * as "the next call is imminent, advance now" -- can consult this helper.
+ */
+export function isSkipDelayActive(): boolean {
+    return skipDelayTimer !== undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Module-level internal state (Angular service private fields not in Zustand)
 // ---------------------------------------------------------------------------
