@@ -89,24 +89,24 @@ interface RetroButtonProps {
   state?: 'off' | 'on' | 'partial' | 'search';
   onClick: () => void;
   /**
-   * Extra styles merged LAST so they can override buttonBaseSx. Used when
-   * the button lives inside a positioning wrapper (e.g. PAUSE + close-X)
-   * and needs its own flex/margin neutralized to match the visual size of
-   * its un-wrapped siblings.
+   * Optional overlay content rendered inside the button (absolutely
+   * positioned by the caller). Useful for adding affordances like the
+   * search-queue close-X on PAUSE without disturbing the flex layout of
+   * the button's row -- the RetroButton stays a direct flex child so it
+   * distributes identically to its un-decorated siblings.
    */
-  sxOverride?: SxProps<Theme>;
+  overlay?: React.ReactNode;
 }
 
-function RetroButton({ label, subLabel, state, onClick, sxOverride }: RetroButtonProps) {
+function RetroButton({ label, subLabel, state, onClick, overlay }: RetroButtonProps) {
   return (
     <Box
       component="button"
       onClick={onClick}
-      sx={[
-        buttonBaseSx,
-        statusDotSx(state),
-        ...(Array.isArray(sxOverride) ? sxOverride : sxOverride ? [sxOverride] : []),
-      ] as SxProps<Theme>}
+      sx={{
+        ...buttonBaseSx,
+        ...statusDotSx(state),
+      } as SxProps<Theme>}
     >
       {label}
       {subLabel && (
@@ -117,6 +117,7 @@ function RetroButton({ label, subLabel, state, onClick, sxOverride }: RetroButto
           {subLabel}
         </Box>
       )}
+      {overlay}
     </Box>
   );
 }
@@ -297,75 +298,73 @@ export function ControlButtons({ onOpenSearch, onOpenSelect, onReplay }: Control
         <RetroButton label="Search Call" onClick={handleSearchCall} />
         <Box sx={spacerSx} />
         {/*
-          The wrapper acts as a drop-in replacement for a RetroButton in the
-          flex row -- it has the SAME `flex: 1` and `m: '2px'` that a direct
-          RetroButton would, so flex distribution treats it identically to
-          its siblings (SEARCH CALL / SELECT TG). The inner RetroButton
-          then has its own margin and flex zeroed out and fills the wrapper
-          at 100% width. Without this, the wrapper's "no margin" + the inner
-          button's 2px margin desync the flex math and PAUSE ends up visibly
-          narrower than its siblings.
+          PAUSE is a direct flex sibling of SEARCH CALL / SELECT TG so they
+          all distribute width identically. The close-X during search-queue
+          playback is rendered as an absolutely-positioned overlay INSIDE
+          the button via the `overlay` prop (the button is already
+          `position: relative`). It's a nested <span> with role="button" so
+          the click doesn't bubble to the PAUSE button itself.
         */}
-        <Box sx={{ flex: 1, m: '2px', position: 'relative', display: 'block' }}>
-          <RetroButton
-            label="Pause"
-            subLabel={paused ? formatDuration(pausedElapsed, 0) : undefined}
-            state={
-              searchQueueActive
-                ? 'search'              // blue LED during search-queue playback
-                : paused
-                  ? 'on'
-                  : 'off'
-            }
-            onClick={handlePause}
-            sxOverride={{ m: 0, flex: 'none', width: '100%' }}
-          />
-          {searchQueueActive && (
-            <Box
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                store.beep(BeepStyle.Deactivate);
-                store.exitSearchQueue();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+        <RetroButton
+          label="Pause"
+          subLabel={paused ? formatDuration(pausedElapsed, 0) : undefined}
+          state={
+            searchQueueActive
+              ? 'search'              // blue LED during search-queue playback
+              : paused
+                ? 'on'
+                : 'off'
+          }
+          onClick={handlePause}
+          overlay={
+            searchQueueActive ? (
+              <Box
+                component="span"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
                   store.beep(BeepStyle.Deactivate);
                   store.exitSearchQueue();
-                }
-              }}
-              title="Exit search queue (resume livefeed)"
-              sx={{
-                position: 'absolute',
-                top: 2,
-                right: 2,
-                width: 18,
-                height: 18,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'rgb(255, 100, 100)',
-                background: 'rgba(0, 0, 0, 0.4)',
-                border: '1px solid rgb(160, 60, 60)',
-                borderRadius: '2px',
-                cursor: 'pointer',
-                fontSize: 12,
-                lineHeight: 1,
-                fontWeight: 700,
-                userSelect: 'none',
-                zIndex: 1,
-                '&:hover': {
-                  background: 'rgba(120, 30, 30, 0.6)',
-                  color: 'rgb(255, 160, 160)',
-                },
-              }}
-            >
-              ×
-            </Box>
-          )}
-        </Box>
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    store.beep(BeepStyle.Deactivate);
+                    store.exitSearchQueue();
+                  }
+                }}
+                title="Exit search queue (resume livefeed)"
+                sx={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  width: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgb(255, 100, 100)',
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  border: '1px solid rgb(160, 60, 60)',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  lineHeight: 1,
+                  fontWeight: 700,
+                  userSelect: 'none',
+                  zIndex: 1,
+                  '&:hover': {
+                    background: 'rgba(120, 30, 30, 0.6)',
+                    color: 'rgb(255, 160, 160)',
+                  },
+                }}
+              >
+                ×
+              </Box>
+            ) : undefined
+          }
+        />
         <Box sx={spacerSx} />
         <RetroButton label="Select TG" onClick={handleSelectTg} />
       </Box>
