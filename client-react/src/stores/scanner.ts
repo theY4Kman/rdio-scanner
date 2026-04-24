@@ -1038,18 +1038,30 @@ function parseMessage(command: string, payload: unknown, flags?: string): void {
             if (Array.isArray(payload)) {
                 const calls = payload as Call[];
 
+                // If we're restoring persisted calls after a page reload,
+                // pause BEFORE enqueueing. queue() auto-plays when the
+                // scanner isn't already occupied, and at restore time the
+                // scanner is idle (no audioSource, no call, no pause), so
+                // the first call would get auto-pulled out of the queue.
+                // Worse, on a fresh page load the audio context hasn't been
+                // created yet (it's bootstrapped on the first user gesture),
+                // so the play() path sets state.call and then silently fails
+                // to decode audio -- leaving the UI showing the call while
+                // unpause is a no-op because state.call is already set.
+                // Pausing first makes queue() buffer everything and leaves
+                // the full queue intact for when the user hits play.
+                const restoring = queuePersistRestoring && calls.length > 0;
+                if (restoring) {
+                    $get().pause(true);
+                }
+
                 calls.forEach((call) => {
                     $get().queue(transformCall(call));
                 });
 
                 if (queuePersistRestoring) {
                     queuePersistRestoring = false;
-
                     clearQueueState(instanceId);
-
-                    if (calls.length > 0) {
-                        $get().pause(true);
-                    }
                 }
 
                 if (queuePersistPendingBatches.length > 0) {
