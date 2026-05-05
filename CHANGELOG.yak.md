@@ -5,6 +5,7 @@ I will attempt to retain semantic versioning on the fork version.
 
 ## Unreleased
 ### Changed
+- Replace Angular UI with React/Vite rewrite (`client-react/` promoted to `client/`; legacy Angular client deleted)
 - Upgrade Node.js from 21 to 24 LTS in Dockerfile
 - Upgrade Go from 1.18 to 1.26 in Dockerfile and go.mod
 

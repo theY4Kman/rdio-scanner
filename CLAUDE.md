@@ -23,14 +23,14 @@ bash yak-build.sh && bash ~/.rdio-scanner/restart.sh
 
 ## Repo layout
 
-- `client-react/` — React/Vite frontend (TypeScript, MUI)
+- `client/` — React/Vite frontend (TypeScript, MUI)
 - `server/` — Go backend; built artifacts land in `server/webapp/`
 - `yak-build.sh` — single-command Docker build (debug config)
 - `~/.rdio-scanner/` — runtime data dir (DB, certs, start/restart scripts)
 
 ## Active branch
 
-`yak/client-react` — React frontend rewrite (replacing Angular client).
+`yak/6.x` — primary fork branch.
 
 ## Commit policy
 

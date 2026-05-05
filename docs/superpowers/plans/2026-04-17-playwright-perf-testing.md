@@ -1,5 +1,7 @@
 # Playwright Playback Performance Testing — Implementation Plan
 
+> **Note (2026-05-05):** Inline paths below reference the historical `client-react/` directory, which has since been renamed to `client/`. Paths are preserved verbatim as a record of the work as it was carried out.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add Playwright-based performance regression tests that measure frame rate, long tasks, and layout thrash during call playback in the React scanner client.

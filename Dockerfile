@@ -1,10 +1,10 @@
 FROM node:24-slim AS client
 WORKDIR /app
 
-COPY client-react/package.json client-react/package-lock.json ./
+COPY client/package.json client/package-lock.json ./
 RUN npm ci
 
-COPY client-react/. ./
+COPY client/. ./
 RUN npm run build
 
 

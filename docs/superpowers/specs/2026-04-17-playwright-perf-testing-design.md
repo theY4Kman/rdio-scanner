@@ -1,5 +1,7 @@
 # Playwright Playback Performance Testing
 
+> **Note (2026-05-05):** Inline paths below reference the historical `client-react/` directory, which has since been renamed to `client/`. Paths are preserved verbatim as a record of the work as it was carried out.
+
 **Date:** 2026-04-17
 **Status:** Draft
 **Goal:** Add perf regression tests for the React client's call playback, specifically targeting UnitTimeline jank.

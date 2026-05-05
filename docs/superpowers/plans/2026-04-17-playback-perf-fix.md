@@ -1,5 +1,7 @@
 # Playback Performance Fix — Implementation Plan
 
+> **Note (2026-05-05):** Inline paths below reference the historical `client-react/` directory, which has since been renamed to `client/`. Paths are preserved verbatim as a record of the work as it was carried out.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Eliminate unnecessary re-renders during call playback by isolating time-dependent rendering and switching from `setInterval` to `requestAnimationFrame`.
